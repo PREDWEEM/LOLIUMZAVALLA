@@ -1,6 +1,16 @@
 import numpy as np
+import pandas as pd
 
-from predweem_core import first_peak_index, shift_signal, surface_parameters
+from config_zavalla import CONFIG
+from predweem_core import first_peak_index, shift_signal, simulate_dual, surface_parameters
+
+
+class ConstantANN:
+    def __init__(self, value: float = 0.8):
+        self.value = value
+
+    def predict(self, values):
+        return np.full(len(values), self.value, dtype=float)
 
 
 def test_shift_signal_delays_without_wraparound():
@@ -16,3 +26,32 @@ def test_surface_parameters_are_monotonic():
     ke0, _ = surface_parameters(0)
     ke100, _ = surface_parameters(100)
     assert ke0 > ke100
+
+
+def test_lag_model_uses_20c_termoinhibition_independently():
+    dates = pd.date_range("2026-01-01", periods=60, freq="D")
+    weather = pd.DataFrame(
+        {
+            "Fecha": dates,
+            "TMAX": 24.0,
+            "TMIN": 20.0,
+            "Prec": 20.0,
+        }
+    )
+
+    result = simulate_dual(
+        weather,
+        ConstantANN(),
+        coverage_percent=30,
+        wmax=10.0,
+        lag_days=15,
+    )
+
+    assert CONFIG.umbral_termoinhibicion_c == 24.0
+    assert CONFIG.umbral_termoinhibicion_con_lag_c == 20.0
+    assert not result.data["Termoinhibida_SIN_LAG"].any()
+    assert result.data["Termoinhibida_CON_LAG"].all()
+    assert result.first_peak_no_lag is not None
+    assert result.first_peak_lag is None
+    assert result.data["EMERREL_SIN_LAG"].max() > 0.20
+    assert result.data["EMERREL_CON_LAG"].max() == 0.0
