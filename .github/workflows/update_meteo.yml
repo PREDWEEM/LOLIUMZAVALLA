@@ -1,0 +1,70 @@
+name: Actualizar meteorología Zavalla
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 10 * * *'
+    - cron: '30 18 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: meteo-zavalla-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas requests
+
+      - name: Descargar histórico y pronóstico
+        run: python update_meteo.py
+
+      - name: Validar archivos
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          df = pd.read_csv('meteo_daily.csv')
+          required = {'Fecha', 'TMAX', 'TMIN', 'Prec', 'Fuente', 'TipoDato', 'Emision'}
+          missing = required.difference(df.columns)
+          if missing:
+              raise SystemExit(f'Faltan columnas: {sorted(missing)}')
+          df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
+          if df['Fecha'].isna().any() or df['Fecha'].duplicated().any():
+              raise SystemExit('Fechas inválidas o duplicadas.')
+          if df[['TMAX', 'TMIN', 'Prec']].isna().any().any():
+              raise SystemExit('Hay datos meteorológicos nulos.')
+          if (df['TMAX'] < df['TMIN']).any() or (df['Prec'] < 0).any():
+              raise SystemExit('Inconsistencia física en la serie.')
+          expected = pd.date_range(df['Fecha'].min(), df['Fecha'].max(), freq='D')
+          if len(expected.difference(pd.DatetimeIndex(df['Fecha']))):
+              raise SystemExit('La serie meteorológica no es continua.')
+          print(df.groupby(['Fuente', 'TipoDato']).size())
+          PY
+
+      - name: Guardar actualización
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add meteo_daily.csv data/estado_actualizacion_meteo.json
+          if git diff --cached --quiet; then
+            echo "No hay cambios meteorológicos."
+            exit 0
+          fi
+          git commit -m "Actualiza meteorología Zavalla"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
