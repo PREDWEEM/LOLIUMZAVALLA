@@ -1,0 +1,6 @@
+{
+  "estado": "SIN_PICO_SIMULADO",
+  "modelo_activo": "sin_lag",
+  "lag_operativo_dias": 0,
+  "proxima_accion": "Ejecutar la meteorología y esperar el primer pico sin lag."
+}
