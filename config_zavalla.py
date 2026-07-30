@@ -12,7 +12,10 @@ class ZavallaConfig:
 
     latencia_jd: int = 25
     ventana_termica_dias: int = 5
+    # El modelo sin lag conserva el umbral operativo local de Zavalla.
     umbral_termoinhibicion_c: float = 24.0
+    # El modelo con lag reproduce el umbral operativo del modelo Pergamino.
+    umbral_termoinhibicion_con_lag_c: float = 20.0
     ventana_lluvia_dias: int = 3
     umbral_choque_hidrico_mm: float = 45.0
     fin_choque_hidrico_jd: int = 110
