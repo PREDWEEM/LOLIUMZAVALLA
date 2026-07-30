@@ -3,22 +3,34 @@
 Implementación de PREDWEEM para **Zavalla, Santa Fe** (`-33.02157, -60.87930`) con selección supervisada entre dos hipótesis temporales de emergencia de *Lolium*:
 
 - **modelo sin lag:** funciona inicialmente como alerta anticipada;
-- **modelo con lag fijo:** desplaza la señal diaria después de la ANN y de los filtros biofísicos;
+- **modelo con lag fijo:** desplaza la señal diaria después de la ANN y de sus filtros biofísicos;
 - **ninguno confirmado:** se activa cuando no existe emergencia en ninguna de las dos ventanas.
 
 El sistema no estima lags locales intermedios. La decisión se limita al modelo sin lag o al modelo con el lag fijo configurado.
 
+## Parámetros térmicos de las dos hipótesis
+
+Las curvas se filtran de manera independiente antes de aplicar el desplazamiento temporal:
+
+- modelo sin lag: termoinhibición cuando `Tmedia_5d >= 24 °C`;
+- modelo con lag: termoinhibición cuando `Tmedia_5d >= 20 °C`;
+- modelo con lag: desplazamiento fijo predeterminado de `+15 días` después de la termoinhibición y del filtro del primer pico.
+
+Esta separación evita que el umbral de 20 °C del modelo con lag modifique la curva anticipada sin lag.
+
 ## Flujo operativo
 
 1. La ANN calcula la emergencia diaria con `JD`, `TMAX`, `TMIN` y precipitación.
-2. Se aplican choque hídrico, balance superficial, termoinhibición y latencia.
-3. Se calcula simultáneamente `EMERREL_SIN_LAG` y `EMERREL_CON_LAG`.
-4. Antes de la verificación a campo se muestran las dos curvas.
-5. Al detectarse el primer pico sin lag, la aplicación solicita una inspección.
-6. Si la primera inspección confirma emergencia, se selecciona el modelo sin lag y se oculta la curva con lag.
-7. Si la primera inspección no detecta emergencia, se selecciona provisionalmente el modelo con lag fijo y se oculta la curva sin lag.
-8. Una emergencia próxima a la ventana desplazada confirma el modelo con lag.
-9. Si tampoco hay emergencia en la ventana con lag, el sistema rechaza ambos modelos y solicita revisar los parámetros.
+2. Se aplican choque hídrico y balance superficial comunes.
+3. Cada hipótesis aplica su propio umbral de termoinhibición, la latencia y el filtro del primer pico.
+4. El modelo con lag desplaza su señal filtrada el número fijo de días configurado.
+5. Se calculan simultáneamente `EMERREL_SIN_LAG` y `EMERREL_CON_LAG`.
+6. Antes de la verificación a campo se muestran las dos curvas.
+7. Al detectarse el primer pico sin lag, la aplicación solicita una inspección.
+8. Si la primera inspección confirma emergencia, se selecciona el modelo sin lag y se oculta la curva con lag.
+9. Si la primera inspección no detecta emergencia, se selecciona provisionalmente el modelo con lag fijo y se oculta la curva sin lag.
+10. Una emergencia próxima a la ventana desplazada confirma el modelo con lag.
+11. Si tampoco hay emergencia en la ventana con lag, el sistema rechaza ambos modelos y solicita revisar los parámetros.
 
 ## Estados
 
