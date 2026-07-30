@@ -1,3 +1,10 @@
 {
-  "estado": "PENDIENTE_PRIMERA_ACTUALIZACION"
+  "actualizado": "2026-07-30T19:56:17-03:00",
+  "sitio": "Zavalla, Santa Fe",
+  "latitud": -33.02157,
+  "longitud": -60.8793,
+  "inicio": "2026-01-01",
+  "fin": "2026-08-06",
+  "filas": 218,
+  "fuentes": "{('OPEN_METEO_ECMWF_IFS_ARCHIVE', 'Historico_modelo'): 210, ('OPEN_METEO_ECMWF_IFS_FORECAST', 'Pronostico'): 8}"
 }
