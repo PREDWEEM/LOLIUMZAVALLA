@@ -456,20 +456,27 @@ else:
         )
         for index, row in inspections.iterrows()
     }
+    inspection_signature = int(
+        pd.util.hash_pandas_object(
+            inspections.astype(str),
+            index=True,
+        ).sum()
+    )
     selected_indices = st.multiselect(
         "Seleccionar registros de campo para borrar",
         options=list(option_labels),
         format_func=lambda value: option_labels[value],
-        key="delete_inspection_indices",
+        key=f"delete_inspection_indices_{inspection_signature}",
     )
     confirm_delete = st.checkbox(
         "Confirmo que deseo borrar los registros seleccionados",
-        key="confirm_delete_inspections",
+        key=f"confirm_delete_inspections_{inspection_signature}",
     )
     delete_clicked = st.button(
         "🗑️ Borrar registros seleccionados",
         disabled=not selected_indices or not confirm_delete,
         type="secondary",
+        key=f"delete_inspections_button_{inspection_signature}",
     )
     if delete_clicked:
         updated_inspections = inspections.drop(
@@ -478,8 +485,6 @@ else:
         ).reset_index(drop=True)
         st.session_state.inspections = normalize_inspections(updated_inspections)
         save_inspections(st.session_state.inspections, INSPECTIONS_PATH)
-        st.session_state.pop("delete_inspection_indices", None)
-        st.session_state.pop("confirm_delete_inspections", None)
         st.success(
             f"Se borraron {len(selected_indices)} registro(s). "
             "El selector será recalculado."
