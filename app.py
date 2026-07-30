@@ -9,7 +9,11 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from config_zavalla import CONFIG
-from predweem_core import load_ann, simulate_dual
+from predweem_core import (
+    load_ann,
+    phenology_window_dates,
+    simulate_dual,
+)
 from selector_adaptativo import (
     INSPECTION_COLUMNS,
     evaluate_selector,
@@ -47,6 +51,66 @@ def read_table(source) -> pd.DataFrame:
 @st.cache_resource
 def get_ann():
     return load_ann(BASE)
+
+
+def add_phenology_window(
+    figure: go.Figure,
+    *,
+    control_date: pd.Timestamp | None,
+    limit_date: pd.Timestamp | None,
+    final_date: pd.Timestamp,
+    label: str,
+    fillcolor: str,
+) -> None:
+    """Sombrea la ventana de 600–800 °Cd y marca sus límites."""
+    if control_date is None:
+        return
+
+    end_date = limit_date if limit_date is not None else final_date
+    annotation = (
+        label
+        if limit_date is not None
+        else f"{label} · 800 °Cd pendiente"
+    )
+    figure.add_vrect(
+        x0=control_date,
+        x1=end_date,
+        fillcolor=fillcolor,
+        opacity=0.16,
+        layer="below",
+        line_width=0,
+        annotation_text=annotation,
+        annotation_position="top left",
+    )
+    figure.add_vline(
+        x=control_date,
+        line_width=1.5,
+        line_dash="dash",
+        line_color=fillcolor,
+    )
+    if limit_date is not None:
+        figure.add_vline(
+            x=limit_date,
+            line_width=1.5,
+            line_dash="dash",
+            line_color=fillcolor,
+        )
+
+
+def format_window(
+    name: str,
+    control_date: pd.Timestamp | None,
+    limit_date: pd.Timestamp | None,
+) -> str:
+    if control_date is None:
+        return f"{name}: 600 °Cd todavía no alcanzados"
+    control_text = control_date.strftime("%d/%m/%Y")
+    limit_text = (
+        limit_date.strftime("%d/%m/%Y")
+        if limit_date is not None
+        else "pendiente"
+    )
+    return f"{name}: 600 °Cd = {control_text}; 800 °Cd = {limit_text}"
 
 
 with st.sidebar:
@@ -186,6 +250,19 @@ metrics[5].metric("Próxima inspección", decision.proxima_inspeccion or "—")
 
 plot_data = result.data.copy()
 show_no_lag, show_lag = visible_models(decision)
+control_no_lag, limit_no_lag = phenology_window_dates(
+    plot_data["Fecha"],
+    plot_data["TT_DESDE_PICO_SIN_LAG"],
+    CONFIG.tt_control_cd,
+    CONFIG.tt_limite_cd,
+)
+control_lag, limit_lag = phenology_window_dates(
+    plot_data["Fecha"],
+    plot_data["TT_DESDE_PICO_CON_LAG"],
+    CONFIG.tt_control_cd,
+    CONFIG.tt_limite_cd,
+)
+
 fig = go.Figure()
 if show_no_lag:
     fig.add_trace(
@@ -205,6 +282,44 @@ if show_lag:
             mode="lines",
         )
     )
+
+final_date = pd.Timestamp(plot_data["Fecha"].max())
+if show_no_lag and show_lag:
+    add_phenology_window(
+        fig,
+        control_date=control_no_lag,
+        limit_date=limit_no_lag,
+        final_date=final_date,
+        label="600–800 °Cd · sin lag",
+        fillcolor="#2563eb",
+    )
+    add_phenology_window(
+        fig,
+        control_date=control_lag,
+        limit_date=limit_lag,
+        final_date=final_date,
+        label=f"600–800 °Cd · lag {lag_candidate} d",
+        fillcolor="#f59e0b",
+    )
+elif show_no_lag:
+    add_phenology_window(
+        fig,
+        control_date=control_no_lag,
+        limit_date=limit_no_lag,
+        final_date=final_date,
+        label="Ventana fenológica 600–800 °Cd",
+        fillcolor="#16a34a",
+    )
+elif show_lag:
+    add_phenology_window(
+        fig,
+        control_date=control_lag,
+        limit_date=limit_lag,
+        final_date=final_date,
+        label="Ventana fenológica 600–800 °Cd",
+        fillcolor="#16a34a",
+    )
+
 if not inspections.empty:
     positive = (
         inspections["Emergencia_confirmada"]
@@ -245,15 +360,31 @@ fig.update_layout(
         "showgrid": False,
     },
     hovermode="x unified",
-    height=520,
+    height=560,
     legend={"orientation": "h"},
 )
 st.plotly_chart(fig, width="stretch")
 
+window_messages = []
+if show_no_lag:
+    window_messages.append(
+        format_window("Sin lag", control_no_lag, limit_no_lag)
+    )
+if show_lag:
+    window_messages.append(
+        format_window(
+            f"Con lag fijo de {lag_candidate} días",
+            control_lag,
+            limit_lag,
+        )
+    )
+st.caption(" · ".join(window_messages))
+
 if decision.modelo_activo in {"sin_lag", "con_lag"}:
     st.info(
         "El modelo alternativo fue retirado de la gráfica porque la evidencia de "
-        "campo ya produjo una selección operativa."
+        "campo ya produjo una selección operativa. La banda sombreada corresponde "
+        "a la ventana fenológica de 600–800 °Cd del modelo visible."
     )
 
 st.subheader("Registrar inspección de campo")
@@ -286,15 +417,17 @@ with st.form("inspection_form", clear_on_submit=True):
 
 if submitted:
     row = pd.DataFrame(
-        [[
-            pd.Timestamp(inspection_date),
-            operator,
-            plants_m2,
-            positive_quadrats,
-            total_quadrats,
-            explicit_confirmation,
-            notes,
-        ]],
+        [
+            [
+                pd.Timestamp(inspection_date),
+                operator,
+                plants_m2,
+                positive_quadrats,
+                total_quadrats,
+                explicit_confirmation,
+                notes,
+            ]
+        ],
         columns=INSPECTION_COLUMNS,
     )
     st.session_state.inspections = normalize_inspections(
@@ -307,7 +440,52 @@ if submitted:
     st.rerun()
 
 st.subheader("Historial y auditoría")
-st.dataframe(inspections, width="stretch", hide_index=True)
+if inspections.empty:
+    st.info("Todavía no existen registros de campo.")
+else:
+    display_inspections = inspections.copy()
+    display_inspections.insert(0, "Registro", range(1, len(display_inspections) + 1))
+    st.dataframe(display_inspections, width="stretch", hide_index=True)
+
+    option_labels = {
+        index: (
+            f"Registro {index + 1} · "
+            f"{pd.Timestamp(row['Fecha']).strftime('%d/%m/%Y')} · "
+            f"{str(row['Operario']).strip() or 'Sin operario'} · "
+            f"{float(row['Plantas_m2']):.2f} plantas/m²"
+        )
+        for index, row in inspections.iterrows()
+    }
+    selected_indices = st.multiselect(
+        "Seleccionar registros de campo para borrar",
+        options=list(option_labels),
+        format_func=lambda value: option_labels[value],
+        key="delete_inspection_indices",
+    )
+    confirm_delete = st.checkbox(
+        "Confirmo que deseo borrar los registros seleccionados",
+        key="confirm_delete_inspections",
+    )
+    delete_clicked = st.button(
+        "🗑️ Borrar registros seleccionados",
+        disabled=not selected_indices or not confirm_delete,
+        type="secondary",
+    )
+    if delete_clicked:
+        updated_inspections = inspections.drop(
+            index=selected_indices,
+            errors="ignore",
+        ).reset_index(drop=True)
+        st.session_state.inspections = normalize_inspections(updated_inspections)
+        save_inspections(st.session_state.inspections, INSPECTIONS_PATH)
+        st.session_state.pop("delete_inspection_indices", None)
+        st.session_state.pop("confirm_delete_inspections", None)
+        st.success(
+            f"Se borraron {len(selected_indices)} registro(s). "
+            "El selector será recalculado."
+        )
+        st.rerun()
+
 st.download_button(
     "Descargar inspecciones CSV",
     data=inspections.to_csv(index=False).encode("utf-8"),
@@ -336,6 +514,20 @@ with st.expander("Resultados diarios"):
             sheet_name="Selector",
             index=False,
         )
+        pd.DataFrame(
+            [
+                {
+                    "Modelo": "Sin lag",
+                    "Fecha_600_Cd": control_no_lag,
+                    "Fecha_800_Cd": limit_no_lag,
+                },
+                {
+                    "Modelo": f"Con lag fijo de {lag_candidate} días",
+                    "Fecha_600_Cd": control_lag,
+                    "Fecha_800_Cd": limit_lag,
+                },
+            ]
+        ).to_excel(writer, sheet_name="Ventana_Fenologica", index=False)
     st.download_button(
         "Descargar resultados completos",
         data=buffer.getvalue(),
