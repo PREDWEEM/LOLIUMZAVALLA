@@ -27,8 +27,6 @@ class ZavallaConfig:
 
     umbral_primer_pico: float = 0.20
     lag_candidato_dias: int = 15
-    negativas_para_lag: int = 2
-    dias_entre_inspecciones: int = 4
     tolerancia_sin_lag_dias: int = 4
     tolerancia_lag_dias: int = 5
     densidad_confirmacion_pl_m2: float = 0.5
