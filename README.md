@@ -1,34 +1,33 @@
-# PREDWEEM Zavalla — Selector Adaptativo
+# PREDWEEM Zavalla — Selector binario sin lag / con lag
 
 Implementación de PREDWEEM para **Zavalla, Santa Fe** (`-33.02157, -60.87930`) con selección supervisada entre dos hipótesis temporales de emergencia de *Lolium*:
 
-- **modelo sin lag:** se utiliza inicialmente como alerta anticipada;
-- **modelo con lag candidato:** desplaza la señal diaria después de la ANN y de los filtros biofísicos;
-- **lag local:** se estima cuando la primera emergencia observada ocurre entre ambas ventanas;
+- **modelo sin lag:** funciona inicialmente como alerta anticipada;
+- **modelo con lag fijo:** desplaza la señal diaria después de la ANN y de los filtros biofísicos;
 - **ninguno confirmado:** se activa cuando no existe emergencia en ninguna de las dos ventanas.
+
+El sistema no estima lags locales intermedios. La decisión se limita al modelo sin lag o al modelo con el lag fijo configurado.
 
 ## Flujo operativo
 
 1. La ANN calcula la emergencia diaria con `JD`, `TMAX`, `TMIN` y precipitación.
 2. Se aplican choque hídrico, balance superficial, termoinhibición y latencia.
 3. Se calcula simultáneamente `EMERREL_SIN_LAG` y `EMERREL_CON_LAG`.
-4. Al detectarse el primer pico sin lag, la aplicación solicita una inspección.
-5. Una observación positiva próxima al pico confirma el modelo sin lag.
-6. Las inspecciones negativas convierten el lag en candidato; por defecto se requieren dos.
-7. Una emergencia próxima a la ventana desplazada confirma el modelo con lag.
-8. Si la emergencia aparece en una fecha intermedia, se estima un lag local.
-9. Si no hay emergencia en ambas ventanas, el sistema rechaza ambos modelos y solicita revisar los parámetros.
+4. Antes de la verificación a campo se muestran las dos curvas.
+5. Al detectarse el primer pico sin lag, la aplicación solicita una inspección.
+6. Si la primera inspección confirma emergencia, se selecciona el modelo sin lag y se oculta la curva con lag.
+7. Si la primera inspección no detecta emergencia, se selecciona provisionalmente el modelo con lag fijo y se oculta la curva sin lag.
+8. Una emergencia próxima a la ventana desplazada confirma el modelo con lag.
+9. Si tampoco hay emergencia en la ventana con lag, el sistema rechaza ambos modelos y solicita revisar los parámetros.
 
 ## Estados
 
 - `SIN_PICO_SIMULADO`
 - `SIN_LAG_EN_EVALUACION`
 - `VERIFICACION_1_PENDIENTE`
-- `LAG_CANDIDATO`
 - `CON_LAG_PROVISIONAL`
 - `SIN_LAG_CONFIRMADO`
 - `CON_LAG_CONFIRMADO`
-- `LAG_LOCAL_ESTIMADO`
 - `NINGUNO_CONFIRMADO`
 
 ## Meteorología
