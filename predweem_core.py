@@ -141,6 +141,27 @@ def first_peak_index(values: np.ndarray, threshold: float) -> int | None:
     return int(candidates[0]) if candidates.size else None
 
 
+def apply_termoinhibition_and_peak_filter(
+    base_signal: np.ndarray,
+    *,
+    thermoinhibited: np.ndarray,
+    julian_days: np.ndarray,
+    latency_jd: int,
+    peak_threshold: float,
+) -> tuple[np.ndarray, int | None]:
+    """Aplica filtros temporales a una hipótesis sin alterar la otra."""
+    filtered = np.asarray(base_signal, dtype=float).copy()
+    filtered[np.asarray(thermoinhibited, dtype=bool)] = 0.0
+    filtered[np.asarray(julian_days, dtype=float) <= int(latency_jd)] = 0.0
+    filtered = np.clip(filtered, 0.0, 1.0)
+    peak_index = first_peak_index(filtered, peak_threshold)
+    if peak_index is None:
+        filtered[:] = 0.0
+    else:
+        filtered[:peak_index] = 0.0
+    return filtered, peak_index
+
+
 @dataclass
 class SimulationResult:
     data: pd.DataFrame
@@ -161,10 +182,12 @@ def simulate_dual(raw_weather: pd.DataFrame, ann: PracticalANNModel, *, coverage
     inputs = data[["Julian_days", "TMAX", "TMIN", "Prec"]].to_numpy(float)
     raw_ann = ann.predict(inputs)
     data["EMERREL_RAW_ANN"] = raw_ann
-    emer = raw_ann.copy()
+
+    # Señal común hasta completar los filtros hídricos.
+    emer_base = raw_ann.copy()
     data["Prec_3d"] = data["Prec"].rolling(config.ventana_lluvia_dias, min_periods=1).sum()
     hydric_shock = (data["Julian_days"] > config.latencia_jd) & (data["Julian_days"] <= config.fin_choque_hidrico_jd) & (data["Prec_3d"] >= config.umbral_choque_hidrico_mm)
-    emer[hydric_shock.to_numpy()] = np.maximum(emer[hydric_shock.to_numpy()], config.techo_choque_hidrico)
+    emer_base[hydric_shock.to_numpy()] = np.maximum(emer_base[hydric_shock.to_numpy()], config.techo_choque_hidrico)
     data["Choque_Hidrico"] = hydric_shock
     data["ET0"] = calculate_et0_hargreaves(data["Julian_days"], data["TMAX"], data["TMIN"], config.latitud)
     water, kr_daily = surface_water_balance(data["Prec"], data["ET0"], wmax, ke, kr_exponent)
@@ -174,29 +197,48 @@ def simulate_dual(raw_weather: pd.DataFrame, ann: PracticalANNModel, *, coverage
     data["Humedad_Relativa"] = relative_water
     hydric_factor = 1.0 / (1.0 + np.exp(-config.pendiente_hidrica * (relative_water - config.p50_hidrico)))
     data["Hydric_Factor"] = hydric_factor
-    emer *= hydric_factor
-    emer[relative_water < config.corte_hidrico] = 0.0
+    emer_base *= hydric_factor
+    emer_base[relative_water < config.corte_hidrico] = 0.0
     recharge = (data["Prec"] >= float(wmax)).cummax().to_numpy()
     data["Lluvia_Recarga"] = recharge
-    emer[~recharge] = 0.0
+    emer_base[~recharge] = 0.0
+
+    # Cada hipótesis utiliza su propio umbral de termoinhibición.
     data["Tmedia_5d"] = data["Tmedia_aire"].rolling(config.ventana_termica_dias, min_periods=1).mean()
-    thermoinhibited = data["Tmedia_5d"] >= config.umbral_termoinhibicion_c
-    data["Termoinhibida"] = thermoinhibited
-    emer[thermoinhibited.to_numpy()] = 0.0
-    emer[(data["Julian_days"] <= config.latencia_jd).to_numpy()] = 0.0
-    emer = np.clip(emer, 0.0, 1.0)
-    idx0 = first_peak_index(emer, config.umbral_primer_pico)
-    if idx0 is not None:
-        emer[:idx0] = 0.0
-    else:
-        emer[:] = 0.0
-    emer_lag = shift_signal(emer, int(lag_days))
+    thermoinhibited_no_lag = data["Tmedia_5d"] >= config.umbral_termoinhibicion_c
+    thermoinhibited_lag = data["Tmedia_5d"] >= config.umbral_termoinhibicion_con_lag_c
+    data["Termoinhibida"] = thermoinhibited_no_lag
+    data["Termoinhibida_SIN_LAG"] = thermoinhibited_no_lag
+    data["Termoinhibida_CON_LAG"] = thermoinhibited_lag
+    data["Umbral_Termoinhibicion_SIN_LAG_C"] = float(config.umbral_termoinhibicion_c)
+    data["Umbral_Termoinhibicion_CON_LAG_C"] = float(config.umbral_termoinhibicion_con_lag_c)
+
+    julian = data["Julian_days"].to_numpy(float)
+    emer_no_lag, idx0 = apply_termoinhibition_and_peak_filter(
+        emer_base,
+        thermoinhibited=thermoinhibited_no_lag.to_numpy(),
+        julian_days=julian,
+        latency_jd=config.latencia_jd,
+        peak_threshold=config.umbral_primer_pico,
+    )
+    emer_lag_before_shift, _ = apply_termoinhibition_and_peak_filter(
+        emer_base,
+        thermoinhibited=thermoinhibited_lag.to_numpy(),
+        julian_days=julian,
+        latency_jd=config.latencia_jd,
+        peak_threshold=config.umbral_primer_pico,
+    )
+    emer_lag = shift_signal(emer_lag_before_shift, int(lag_days))
     idx_lag = first_peak_index(emer_lag, config.umbral_primer_pico)
-    if idx_lag is not None:
+    if idx_lag is None:
+        emer_lag[:] = 0.0
+    else:
         emer_lag[:idx_lag] = 0.0
-    data["EMERREL_SIN_LAG"] = emer
+
+    data["EMERREL_SIN_LAG"] = emer_no_lag
+    data["EMERREL_CON_LAG_ANTES_DESPLAZAMIENTO"] = emer_lag_before_shift
     data["EMERREL_CON_LAG"] = emer_lag
-    data["EMERAC_SIN_LAG"] = np.cumsum(emer)
+    data["EMERAC_SIN_LAG"] = np.cumsum(emer_no_lag)
     data["EMERAC_CON_LAG"] = np.cumsum(emer_lag)
     data["GD_Tb2"] = [thermal_time_scalar(t, config.t_base_c, config.t_optima_c, config.t_critica_c) for t in data["Tmedia_aire"]]
     data["TT_ACUM"] = data["GD_Tb2"].cumsum()
