@@ -2,7 +2,14 @@ import numpy as np
 import pandas as pd
 
 from config_zavalla import CONFIG
-from predweem_core import first_peak_index, shift_signal, simulate_dual, surface_parameters
+from predweem_core import (
+    cumulative_thermal_time_from_peak,
+    first_peak_index,
+    phenology_window_dates,
+    shift_signal,
+    simulate_dual,
+    surface_parameters,
+)
 
 
 class ConstantANN:
@@ -26,6 +33,27 @@ def test_surface_parameters_are_monotonic():
     ke0, _ = surface_parameters(0)
     ke100, _ = surface_parameters(100)
     assert ke0 > ke100
+
+
+def test_phenology_window_accumulates_from_peak():
+    dates = pd.date_range("2026-03-01", periods=10, freq="D")
+    cumulative = cumulative_thermal_time_from_peak(
+        np.full(10, 100.0),
+        peak_index=2,
+    )
+
+    assert np.isnan(cumulative[0])
+    assert np.isnan(cumulative[1])
+    assert cumulative[2] == 100.0
+
+    control_date, limit_date = phenology_window_dates(
+        dates,
+        cumulative,
+        control_cd=600.0,
+        limit_cd=800.0,
+    )
+    assert control_date == pd.Timestamp("2026-03-08")
+    assert limit_date == pd.Timestamp("2026-03-10")
 
 
 def test_lag_model_uses_20c_termoinhibition_independently():
