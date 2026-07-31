@@ -6,7 +6,7 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class LoliumSite:
-    """Identidad geográfica y fuente histórica de una implementación LOLIUM."""
+    """Identidad geográfica y fuente meteorológica de una implementación LOLIUM."""
 
     slug: str
     nombre: str
@@ -16,6 +16,8 @@ class LoliumSite:
     repositorio: str
     timezone: str = "America/Argentina/Buenos_Aires"
     usa_siga_historico: bool = False
+    rama_meteo: str = "main"
+    archivo_meteo: str = "meteo_daily.csv"
 
     @property
     def etiqueta(self) -> str:
@@ -29,7 +31,7 @@ class LoliumSite:
     def raw_meteo_url(self) -> str:
         return (
             f"https://raw.githubusercontent.com/{self.repositorio}/"
-            "main/meteo_daily.csv"
+            f"{self.rama_meteo}/{self.archivo_meteo}"
         )
 
     def meteo_path(self, base: str | Path = ".") -> Path:
@@ -45,10 +47,9 @@ class LoliumSite:
         return asdict(self)
 
 
-# Sitios inventariados a partir de los repositorios LOLIUM accesibles de PREDWEEM.
-# En Balcarce, Bordenave, Pergamino, San Pedro y Tres Arroyos los repositorios
-# geográficos ya construyen una serie consolidada con SIGA como observación
-# prioritaria y ECMWF únicamente como reemplazo provisional de huecos.
+# Cada sitio usa como histórico prioritario el archivo meteo_daily.csv de su
+# repositorio geográfico. En los sitios marcados con usa_siga_historico=True,
+# además se exige que ese archivo contenga observaciones SIGA.
 SITES: dict[str, LoliumSite] = {
     "azul": LoliumSite(
         slug="azul",
@@ -157,10 +158,14 @@ def validate_registry() -> None:
             raise ValueError(f"Longitud inválida para {site.nombre}.")
         if not site.repositorio.startswith("PREDWEEM/"):
             raise ValueError(f"Repositorio inválido para {site.nombre}.")
-        if site.usa_siga_historico and not site.raw_meteo_url.endswith(
-            "/main/meteo_daily.csv"
+        if not site.raw_meteo_url.endswith(
+            f"/{site.rama_meteo}/{site.archivo_meteo}"
         ):
-            raise ValueError(f"Fuente SIGA inválida para {site.nombre}.")
+            raise ValueError(f"Fuente meteorológica inválida para {site.nombre}.")
+        if site.archivo_meteo != "meteo_daily.csv":
+            raise ValueError(
+                f"{site.nombre}: el archivo histórico debe ser meteo_daily.csv."
+            )
 
 
 validate_registry()
