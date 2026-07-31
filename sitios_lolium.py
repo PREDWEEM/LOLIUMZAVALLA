@@ -4,9 +4,12 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 
+VALID_OPERATIONAL_MODELS = {"sin_lag", "con_lag"}
+
+
 @dataclass(frozen=True)
 class LoliumSite:
-    """Identidad geográfica y fuente meteorológica de una implementación LOLIUM."""
+    """Identidad geográfica y política operativa de una implementación LOLIUM."""
 
     slug: str
     nombre: str
@@ -18,6 +21,8 @@ class LoliumSite:
     usa_siga_historico: bool = False
     rama_meteo: str = "main"
     archivo_meteo: str = "meteo_daily.csv"
+    modelo_operativo: str = "sin_lag"
+    lag_operativo_dias: int = 0
 
     @property
     def etiqueta(self) -> str:
@@ -34,9 +39,17 @@ class LoliumSite:
             f"{self.rama_meteo}/{self.archivo_meteo}"
         )
 
+    @property
+    def modelo_operativo_etiqueta(self) -> str:
+        if self.modelo_operativo == "con_lag":
+            return f"Con lag fijo de {self.lag_operativo_dias} días"
+        return "Sin lag"
+
     def meteo_path(self, base: str | Path = ".") -> Path:
         return Path(base) / "data" / "meteo_sitios" / f"{self.slug}.csv"
 
+    # Se conservan estas rutas únicamente por compatibilidad con datos históricos.
+    # La aplicación operativa ya no lee ni escribe recuentos de campo.
     def inspections_path(self, base: str | Path = ".") -> Path:
         return Path(base) / "data" / "inspecciones" / f"{self.slug}.csv"
 
@@ -47,9 +60,6 @@ class LoliumSite:
         return asdict(self)
 
 
-# Cada sitio usa como histórico prioritario el archivo meteo_daily.csv de su
-# repositorio geográfico. En los sitios marcados con usa_siga_historico=True,
-# además se exige que ese archivo contenga observaciones SIGA.
 SITES: dict[str, LoliumSite] = {
     "azul": LoliumSite(
         slug="azul",
@@ -58,6 +68,7 @@ SITES: dict[str, LoliumSite] = {
         latitud=-36.8700,
         longitud=-59.8900,
         repositorio="PREDWEEM/LOLIUM_AZUL2026",
+        modelo_operativo="sin_lag",
     ),
     "balcarce": LoliumSite(
         slug="balcarce",
@@ -67,6 +78,7 @@ SITES: dict[str, LoliumSite] = {
         longitud=-58.2999,
         repositorio="PREDWEEM/LOLIUM_BAL2026",
         usa_siga_historico=True,
+        modelo_operativo="sin_lag",
     ),
     "bordenave": LoliumSite(
         slug="bordenave",
@@ -76,6 +88,7 @@ SITES: dict[str, LoliumSite] = {
         longitud=-63.0200,
         repositorio="PREDWEEM/LOLIUM_BOR2026",
         usa_siga_historico=True,
+        modelo_operativo="sin_lag",
     ),
     "lartigau": LoliumSite(
         slug="lartigau",
@@ -84,6 +97,7 @@ SITES: dict[str, LoliumSite] = {
         latitud=-38.6166,
         longitud=-61.7000,
         repositorio="PREDWEEM/LOLIUM_LARTIGAU-2026",
+        modelo_operativo="sin_lag",
     ),
     "olavarria": LoliumSite(
         slug="olavarria",
@@ -92,6 +106,7 @@ SITES: dict[str, LoliumSite] = {
         latitud=-36.8799,
         longitud=-60.2160,
         repositorio="PREDWEEM/LOLIUM_OLAVA2026",
+        modelo_operativo="sin_lag",
     ),
     "pergamino": LoliumSite(
         slug="pergamino",
@@ -101,6 +116,8 @@ SITES: dict[str, LoliumSite] = {
         longitud=-60.5745,
         repositorio="PREDWEEM/LOLIUM-PERGA2026",
         usa_siga_historico=True,
+        modelo_operativo="con_lag",
+        lag_operativo_dias=15,
     ),
     "san-pedro": LoliumSite(
         slug="san-pedro",
@@ -110,6 +127,7 @@ SITES: dict[str, LoliumSite] = {
         longitud=-59.7965,
         repositorio="PREDWEEM/lolium_sanpedro2026",
         usa_siga_historico=True,
+        modelo_operativo="sin_lag",
     ),
     "tres-arroyos": LoliumSite(
         slug="tres-arroyos",
@@ -119,6 +137,7 @@ SITES: dict[str, LoliumSite] = {
         longitud=-60.2763,
         repositorio="PREDWEEM/loliumTA_2026",
         usa_siga_historico=True,
+        modelo_operativo="sin_lag",
     ),
     "zavalla": LoliumSite(
         slug="zavalla",
@@ -128,6 +147,8 @@ SITES: dict[str, LoliumSite] = {
         longitud=-60.87930,
         repositorio="PREDWEEM/LOLIUMZAVALLA",
         timezone="America/Argentina/Cordoba",
+        modelo_operativo="con_lag",
+        lag_operativo_dias=15,
     ),
 }
 
@@ -148,9 +169,11 @@ def ordered_sites() -> list[LoliumSite]:
 def validate_registry() -> None:
     if DEFAULT_SITE_SLUG not in SITES:
         raise ValueError("El sitio predeterminado no existe en el catálogo.")
+
     slugs = [site.slug for site in SITES.values()]
     if len(slugs) != len(set(slugs)):
         raise ValueError("Existen slugs geográficos duplicados.")
+
     for site in SITES.values():
         if not (-90.0 <= site.latitud <= 90.0):
             raise ValueError(f"Latitud inválida para {site.nombre}.")
@@ -158,13 +181,22 @@ def validate_registry() -> None:
             raise ValueError(f"Longitud inválida para {site.nombre}.")
         if not site.repositorio.startswith("PREDWEEM/"):
             raise ValueError(f"Repositorio inválido para {site.nombre}.")
-        if not site.raw_meteo_url.endswith(
-            f"/{site.rama_meteo}/{site.archivo_meteo}"
-        ):
-            raise ValueError(f"Fuente meteorológica inválida para {site.nombre}.")
         if site.archivo_meteo != "meteo_daily.csv":
             raise ValueError(
                 f"{site.nombre}: el archivo histórico debe ser meteo_daily.csv."
+            )
+        if site.modelo_operativo not in VALID_OPERATIONAL_MODELS:
+            raise ValueError(
+                f"{site.nombre}: modelo operativo inválido: "
+                f"{site.modelo_operativo}."
+            )
+        if site.modelo_operativo == "sin_lag" and site.lag_operativo_dias != 0:
+            raise ValueError(
+                f"{site.nombre}: un modelo sin lag debe usar lag 0."
+            )
+        if site.modelo_operativo == "con_lag" and site.lag_operativo_dias <= 0:
+            raise ValueError(
+                f"{site.nombre}: el modelo con lag requiere un lag positivo."
             )
 
 
