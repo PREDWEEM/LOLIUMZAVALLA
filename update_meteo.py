@@ -17,6 +17,7 @@ LEGACY_OUTPUT = Path("meteo_daily.csv")
 STATE = Path("data/estado_actualizacion_meteo.json")
 START_DATE = date(2026, 1, 1)
 FORECAST_DAYS = 8
+FORECAST_PAST_DAYS = 2
 TIMEOUT = 90
 COLUMNS = ["Fecha", "TMAX", "TMIN", "Prec", "Fuente", "TipoDato", "Emision"]
 
@@ -101,6 +102,48 @@ def validate(frame: pd.DataFrame) -> pd.DataFrame:
     return data
 
 
+def combine_historical_and_forecast(
+    historical: pd.DataFrame,
+    forecast_with_recent_days: pd.DataFrame,
+    today: date,
+) -> pd.DataFrame:
+    """Une bloques sin permitir un hueco entre ayer y el pronóstico.
+
+    La Forecast API se consulta con ``past_days`` para que el día local actual
+    quede incluido aun cuando la ventana predeterminada del modelo comience al
+    día siguiente. El histórico se conserva solo hasta ayer y el bloque de
+    pronóstico se utiliza desde hoy.
+    """
+    historical_block = historical.copy()
+    forecast_block = forecast_with_recent_days.copy()
+
+    if not historical_block.empty:
+        historical_block = historical_block[
+            historical_block["Fecha"].dt.date < today
+        ]
+    forecast_block = forecast_block[
+        forecast_block["Fecha"].dt.date >= today
+    ]
+
+    available_dates = set(forecast_block["Fecha"].dt.date)
+    if today not in available_dates:
+        first_available = (
+            forecast_block["Fecha"].min().date().isoformat()
+            if not forecast_block.empty
+            else "sin fechas"
+        )
+        raise RuntimeError(
+            "Open-Meteo no devolvió el día actual "
+            f"{today.isoformat()} ni siquiera usando past_days="
+            f"{FORECAST_PAST_DAYS}. Primera fecha disponible: "
+            f"{first_available}."
+        )
+
+    return validate(
+        pd.concat([historical_block, forecast_block], ignore_index=True)
+    )
+
+
 def atomic_csv(frame: pd.DataFrame, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
@@ -173,6 +216,7 @@ def fetch_site_weather(site: LoliumSite) -> tuple[pd.DataFrame, str]:
             ),
             "models": "ecmwf_ifs",
             "forecast_days": FORECAST_DAYS,
+            "past_days": FORECAST_PAST_DAYS,
             "timezone": site.timezone,
             "temperature_unit": "celsius",
             "precipitation_unit": "mm",
@@ -185,8 +229,7 @@ def fetch_site_weather(site: LoliumSite) -> tuple[pd.DataFrame, str]:
         "Pronostico",
         emission,
     )
-    forecast = forecast[forecast["Fecha"].dt.date >= today]
-    combined = validate(pd.concat([historical, forecast], ignore_index=True))
+    combined = combine_historical_and_forecast(historical, forecast, today)
     return combined, emission
 
 
