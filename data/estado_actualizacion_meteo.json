@@ -1,10 +1,223 @@
 {
-  "actualizado": "2026-07-30T20:13:12-03:00",
-  "sitio": "Zavalla, Santa Fe",
-  "latitud": -33.02157,
-  "longitud": -60.8793,
-  "inicio": "2026-01-01",
-  "fin": "2026-08-06",
-  "filas": 218,
-  "fuentes": "{('OPEN_METEO_ECMWF_IFS_ARCHIVE', 'Historico_modelo'): 210, ('OPEN_METEO_ECMWF_IFS_FORECAST', 'Pronostico'): 8}"
+  "modo": "multisitio",
+  "sitio_predeterminado": "zavalla",
+  "cantidad_sitios": 9,
+  "sitios": {
+    "azul": {
+      "sitio": "Azul (Buenos Aires)",
+      "repositorio": "PREDWEEM/LOLIUM_AZUL2026",
+      "latitud": -36.87,
+      "longitud": -59.89,
+      "timezone": "America/Argentina/Buenos_Aires",
+      "archivo": "data/meteo_sitios/azul.csv",
+      "actualizado": "2026-07-31T00:12:25-03:00",
+      "inicio": "2026-01-01",
+      "fin": "2026-08-07",
+      "filas": 219,
+      "fuentes": [
+        {
+          "fuente": "OPEN_METEO_ECMWF_IFS_ARCHIVE",
+          "tipo": "Historico_modelo",
+          "filas": 211
+        },
+        {
+          "fuente": "OPEN_METEO_ECMWF_IFS_FORECAST",
+          "tipo": "Pronostico",
+          "filas": 8
+        }
+      ]
+    },
+    "balcarce": {
+      "sitio": "Balcarce (Buenos Aires)",
+      "repositorio": "PREDWEEM/LOLIUM_BAL2026",
+      "latitud": -37.7664,
+      "longitud": -58.2999,
+      "timezone": "America/Argentina/Buenos_Aires",
+      "archivo": "data/meteo_sitios/balcarce.csv",
+      "actualizado": "2026-07-31T00:12:41-03:00",
+      "inicio": "2026-01-01",
+      "fin": "2026-08-07",
+      "filas": 219,
+      "fuentes": [
+        {
+          "fuente": "OPEN_METEO_ECMWF_IFS_ARCHIVE",
+          "tipo": "Historico_modelo",
+          "filas": 211
+        },
+        {
+          "fuente": "OPEN_METEO_ECMWF_IFS_FORECAST",
+          "tipo": "Pronostico",
+          "filas": 8
+        }
+      ]
+    },
+    "bordenave": {
+      "sitio": "Bordenave (Buenos Aires)",
+      "repositorio": "PREDWEEM/LOLIUM_BOR2026",
+      "latitud": -37.761671,
+      "longitud": -63.02,
+      "timezone": "America/Argentina/Buenos_Aires",
+      "archivo": "data/meteo_sitios/bordenave.csv",
+      "actualizado": "2026-07-31T00:12:43-03:00",
+      "inicio": "2026-01-01",
+      "fin": "2026-08-07",
+      "filas": 219,
+      "fuentes": [
+        {
+          "fuente": "OPEN_METEO_ECMWF_IFS_ARCHIVE",
+          "tipo": "Historico_modelo",
+          "filas": 211
+        },
+        {
+          "fuente": "OPEN_METEO_ECMWF_IFS_FORECAST",
+          "tipo": "Pronostico",
+          "filas": 8
+        }
+      ]
+    },
+    "lartigau": {
+      "sitio": "Lartigau (Buenos Aires)",
+      "repositorio": "PREDWEEM/LOLIUM_LARTIGAU-2026",
+      "latitud": -38.6166,
+      "longitud": -61.7,
+      "timezone": "America/Argentina/Buenos_Aires",
+      "archivo": "data/meteo_sitios/lartigau.csv",
+      "actualizado": "2026-07-31T00:12:44-03:00",
+      "inicio": "2026-01-01",
+      "fin": "2026-08-07",
+      "filas": 219,
+      "fuentes": [
+        {
+          "fuente": "OPEN_METEO_ECMWF_IFS_ARCHIVE",
+          "tipo": "Historico_modelo",
+          "filas": 211
+        },
+        {
+          "fuente": "OPEN_METEO_ECMWF_IFS_FORECAST",
+          "tipo": "Pronostico",
+          "filas": 8
+        }
+      ]
+    },
+    "olavarria": {
+      "sitio": "Olavarría (Buenos Aires)",
+      "repositorio": "PREDWEEM/LOLIUM_OLAVA2026",
+      "latitud": -36.8799,
+      "longitud": -60.216,
+      "timezone": "America/Argentina/Buenos_Aires",
+      "archivo": "data/meteo_sitios/olavarria.csv",
+      "actualizado": "2026-07-31T00:12:46-03:00",
+      "inicio": "2026-01-01",
+      "fin": "2026-08-07",
+      "filas": 219,
+      "fuentes": [
+        {
+          "fuente": "OPEN_METEO_ECMWF_IFS_ARCHIVE",
+          "tipo": "Historico_modelo",
+          "filas": 211
+        },
+        {
+          "fuente": "OPEN_METEO_ECMWF_IFS_FORECAST",
+          "tipo": "Pronostico",
+          "filas": 8
+        }
+      ]
+    },
+    "pergamino": {
+      "sitio": "Pergamino (Buenos Aires)",
+      "repositorio": "PREDWEEM/LOLIUM-PERGA2026",
+      "latitud": -33.9443,
+      "longitud": -60.5745,
+      "timezone": "America/Argentina/Buenos_Aires",
+      "archivo": "data/meteo_sitios/pergamino.csv",
+      "actualizado": "2026-07-31T00:12:47-03:00",
+      "inicio": "2026-01-01",
+      "fin": "2026-08-07",
+      "filas": 219,
+      "fuentes": [
+        {
+          "fuente": "OPEN_METEO_ECMWF_IFS_ARCHIVE",
+          "tipo": "Historico_modelo",
+          "filas": 211
+        },
+        {
+          "fuente": "OPEN_METEO_ECMWF_IFS_FORECAST",
+          "tipo": "Pronostico",
+          "filas": 8
+        }
+      ]
+    },
+    "san-pedro": {
+      "sitio": "San Pedro (Buenos Aires)",
+      "repositorio": "PREDWEEM/lolium_sanpedro2026",
+      "latitud": -33.7328,
+      "longitud": -59.7965,
+      "timezone": "America/Argentina/Buenos_Aires",
+      "archivo": "data/meteo_sitios/san-pedro.csv",
+      "actualizado": "2026-07-31T00:16:00-03:00",
+      "inicio": "2026-01-01",
+      "fin": "2026-08-07",
+      "filas": 219,
+      "fuentes": [
+        {
+          "fuente": "OPEN_METEO_ECMWF_IFS_ARCHIVE",
+          "tipo": "Historico_modelo",
+          "filas": 211
+        },
+        {
+          "fuente": "OPEN_METEO_ECMWF_IFS_FORECAST",
+          "tipo": "Pronostico",
+          "filas": 8
+        }
+      ]
+    },
+    "tres-arroyos": {
+      "sitio": "Tres Arroyos (Buenos Aires)",
+      "repositorio": "PREDWEEM/loliumTA_2026",
+      "latitud": -38.45,
+      "longitud": -60.2763,
+      "timezone": "America/Argentina/Buenos_Aires",
+      "archivo": "data/meteo_sitios/tres-arroyos.csv",
+      "actualizado": "2026-07-31T00:16:03-03:00",
+      "inicio": "2026-01-01",
+      "fin": "2026-08-07",
+      "filas": 219,
+      "fuentes": [
+        {
+          "fuente": "OPEN_METEO_ECMWF_IFS_ARCHIVE",
+          "tipo": "Historico_modelo",
+          "filas": 211
+        },
+        {
+          "fuente": "OPEN_METEO_ECMWF_IFS_FORECAST",
+          "tipo": "Pronostico",
+          "filas": 8
+        }
+      ]
+    },
+    "zavalla": {
+      "sitio": "Zavalla (Santa Fe)",
+      "repositorio": "PREDWEEM/LOLIUMZAVALLA",
+      "latitud": -33.02157,
+      "longitud": -60.8793,
+      "timezone": "America/Argentina/Cordoba",
+      "archivo": "data/meteo_sitios/zavalla.csv",
+      "actualizado": "2026-07-31T00:16:05-03:00",
+      "inicio": "2026-01-01",
+      "fin": "2026-08-07",
+      "filas": 219,
+      "fuentes": [
+        {
+          "fuente": "OPEN_METEO_ECMWF_IFS_ARCHIVE",
+          "tipo": "Historico_modelo",
+          "filas": 211
+        },
+        {
+          "fuente": "OPEN_METEO_ECMWF_IFS_FORECAST",
+          "tipo": "Pronostico",
+          "filas": 8
+        }
+      ]
+    }
+  }
 }
