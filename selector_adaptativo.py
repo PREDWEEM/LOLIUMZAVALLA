@@ -107,8 +107,11 @@ def evaluate_selector(
 
     - una inspección positiva antes de acumular dos negativas confirma sin lag;
     - una primera inspección negativa mantiene ambos modelos en evaluación;
-    - dos inspecciones negativas seleccionan el modelo con lag fijo;
-    - una observación posterior en la ventana desplazada confirma el lag.
+    - si los dos primeros conteos válidos son negativos, el modelo con lag se
+      selecciona automáticamente, sin depender de la fecha actual;
+    - una observación positiva posterior en la ventana desplazada confirma el lag;
+    - para rechazar ambos modelos se exige una verificación negativa adicional
+      en la ventana con lag.
 
     No se estima ningún lag local intermedio.
     """
@@ -172,21 +175,11 @@ def evaluate_selector(
             **common,
         )
 
-    negative_rows: list[pd.Series] = []
-    positive_before_two_negatives: pd.Series | None = None
-    for _, row in valid.iterrows():
-        if bool(row["Positiva"]):
-            if len(negative_rows) < 2:
-                positive_before_two_negatives = row
-            break
-        negative_rows.append(row)
-        if len(negative_rows) == 2:
-            break
+    initial_rows = valid.iloc[:2]
+    first_positive = initial_rows[initial_rows["Positiva"]]
 
-    if positive_before_two_negatives is not None:
-        positive_date = pd.Timestamp(
-            positive_before_two_negatives["Fecha"]
-        ).normalize()
+    if not first_positive.empty:
+        positive_date = pd.Timestamp(first_positive.iloc[0]["Fecha"]).normalize()
         return SelectorDecision(
             "SIN_LAG_CONFIRMADO",
             "sin_lag",
@@ -195,14 +188,14 @@ def evaluate_selector(
             None,
             confianza="alta",
             motivo=(
-                "La emergencia fue confirmada antes de completar dos inspecciones "
-                f"negativas ({positive_date.date().isoformat()})."
+                "La emergencia fue confirmada dentro de los dos conteos iniciales "
+                f"({positive_date.date().isoformat()})."
             ),
             **common,
         )
 
-    if len(negative_rows) == 1:
-        first_negative_date = pd.Timestamp(negative_rows[0]["Fecha"]).normalize()
+    if len(initial_rows) == 1:
+        first_negative_date = pd.Timestamp(initial_rows.iloc[0]["Fecha"]).normalize()
         suggested_date = min(
             first_negative_date + pd.Timedelta(days=3),
             peak_fixed_lag,
@@ -213,22 +206,21 @@ def evaluate_selector(
             "VERIFICACION_2_PENDIENTE",
             "pendiente",
             None,
-            "Realizar una segunda inspección. El modelo con lag se seleccionará solamente si la emergencia vuelve a ser 0.",
+            "Realizar una segunda inspección. Si la emergencia vuelve a ser 0, el modelo con lag se seleccionará automáticamente.",
             suggested_date.date().isoformat(),
             confianza="media",
             motivo=(
-                "Existe una sola inspección negativa. Se requieren dos registros "
-                "válidos con emergencia igual a 0 para seleccionar el modelo con lag."
+                "El primer conteo inicial fue negativo. Falta un segundo conteo "
+                "válido para completar la selección automática."
             ),
             **common,
         )
 
-    second_negative_date = pd.Timestamp(negative_rows[1]["Fecha"]).normalize()
+    # Al llegar aquí, los dos primeros conteos válidos fueron negativos.
+    second_negative_date = pd.Timestamp(initial_rows.iloc[1]["Fecha"]).normalize()
+    later = valid[valid["Fecha"] > second_negative_date].copy()
+    later_positives = later[later["Positiva"]]
 
-    # Dos inspecciones negativas seleccionan el modelo con lag fijo.
-    later_positives = valid[
-        (valid["Fecha"] > second_negative_date) & valid["Positiva"]
-    ]
     if not later_positives.empty:
         first_lag_positive = pd.Timestamp(later_positives.iloc[0]["Fecha"]).normalize()
         distance_to_fixed_lag = abs(int((first_lag_positive - peak_fixed_lag).days))
@@ -241,8 +233,8 @@ def evaluate_selector(
                 None,
                 confianza="alta",
                 motivo=(
-                    "Dos inspecciones consecutivas registraron emergencia 0 y la "
-                    f"emergencia posterior coincidió con la ventana del lag fijo de {lag_candidate_days} días."
+                    "Los dos conteos iniciales fueron negativos y la emergencia "
+                    f"posterior coincidió con la ventana del lag fijo de {lag_candidate_days} días."
                 ),
                 **common,
             )
@@ -254,13 +246,19 @@ def evaluate_selector(
             None,
             confianza="media",
             motivo=(
-                "Dos inspecciones negativas seleccionaron el modelo con lag. La "
-                "emergencia posterior quedó fuera de la ventana fija y no se estima un lag local alternativo."
+                "Los dos conteos iniciales negativos seleccionaron automáticamente "
+                "el modelo con lag. La emergencia posterior quedó fuera de la ventana fija."
             ),
             **common,
         )
 
-    if now > peak_fixed_lag + pd.Timedelta(days=config.tolerancia_lag_dias):
+    lag_window_start = peak_fixed_lag - pd.Timedelta(days=config.tolerancia_lag_dias)
+    later_lag_negatives = later[
+        (~later["Positiva"]) & (later["Fecha"] >= lag_window_start)
+    ]
+    lag_window_end = peak_fixed_lag + pd.Timedelta(days=config.tolerancia_lag_dias)
+
+    if not later_lag_negatives.empty and now > lag_window_end:
         return SelectorDecision(
             "NINGUNO_CONFIRMADO",
             "ninguno",
@@ -268,7 +266,10 @@ def evaluate_selector(
             "Revisar meteorología, banco de semillas, dormición, Wmax, cobertura y termoinhibición.",
             None,
             confianza="baja",
-            motivo="No se observó emergencia ni en la ventana sin lag ni en la ventana con lag fijo.",
+            motivo=(
+                "Los dos conteos iniciales activaron el modelo con lag, pero una "
+                "verificación negativa adicional en su ventana no confirmó emergencia."
+            ),
             **common,
         )
 
@@ -280,8 +281,8 @@ def evaluate_selector(
         peak_fixed_lag.date().isoformat(),
         confianza="media",
         motivo=(
-            "Dos inspecciones válidas registraron emergencia igual a 0; se seleccionó "
-            "el modelo con lag fijo."
+            "Los dos primeros conteos válidos registraron emergencia igual a 0; "
+            "el modelo con lag fijo fue seleccionado automáticamente."
         ),
         **common,
     )
