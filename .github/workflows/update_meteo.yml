@@ -1,4 +1,4 @@
-name: Actualizar meteorología Zavalla
+name: Actualizar meteorología multisitio LOLIUM
 
 on:
   workflow_dispatch:
@@ -10,13 +10,13 @@ permissions:
   contents: write
 
 concurrency:
-  group: meteo-zavalla-${{ github.ref }}
+  group: meteo-multisitio-lolium-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   actualizar:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,40 +31,46 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install pandas requests
 
-      - name: Descargar histórico y pronóstico
+      - name: Descargar histórico y pronóstico de todos los sitios
         run: python update_meteo.py
 
-      - name: Validar archivos
+      - name: Validar archivos multisitio
         run: |
           python - <<'PY'
           import pandas as pd
-          df = pd.read_csv('meteo_daily.csv')
+          from sitios_lolium import ordered_sites
+
           required = {'Fecha', 'TMAX', 'TMIN', 'Prec', 'Fuente', 'TipoDato', 'Emision'}
-          missing = required.difference(df.columns)
-          if missing:
-              raise SystemExit(f'Faltan columnas: {sorted(missing)}')
-          df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
-          if df['Fecha'].isna().any() or df['Fecha'].duplicated().any():
-              raise SystemExit('Fechas inválidas o duplicadas.')
-          if df[['TMAX', 'TMIN', 'Prec']].isna().any().any():
-              raise SystemExit('Hay datos meteorológicos nulos.')
-          if (df['TMAX'] < df['TMIN']).any() or (df['Prec'] < 0).any():
-              raise SystemExit('Inconsistencia física en la serie.')
-          expected = pd.date_range(df['Fecha'].min(), df['Fecha'].max(), freq='D')
-          if len(expected.difference(pd.DatetimeIndex(df['Fecha']))):
-              raise SystemExit('La serie meteorológica no es continua.')
-          print(df.groupby(['Fuente', 'TipoDato']).size())
+          for site in ordered_sites():
+              path = site.meteo_path('.')
+              if not path.is_file():
+                  raise SystemExit(f'No se generó {path}')
+              df = pd.read_csv(path)
+              missing = required.difference(df.columns)
+              if missing:
+                  raise SystemExit(f'{site.nombre}: faltan columnas {sorted(missing)}')
+              df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
+              if df.empty or df['Fecha'].isna().any() or df['Fecha'].duplicated().any():
+                  raise SystemExit(f'{site.nombre}: fechas inválidas, duplicadas o serie vacía.')
+              if df[['TMAX', 'TMIN', 'Prec']].isna().any().any():
+                  raise SystemExit(f'{site.nombre}: hay datos meteorológicos nulos.')
+              if (df['TMAX'] < df['TMIN']).any() or (df['Prec'] < 0).any():
+                  raise SystemExit(f'{site.nombre}: inconsistencia física en la serie.')
+              expected = pd.date_range(df['Fecha'].min(), df['Fecha'].max(), freq='D')
+              if len(expected.difference(pd.DatetimeIndex(df['Fecha']))):
+                  raise SystemExit(f'{site.nombre}: la serie meteorológica no es continua.')
+              print(site.nombre, len(df), df['Fecha'].min().date(), df['Fecha'].max().date())
           PY
 
       - name: Guardar actualización
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add meteo_daily.csv data/estado_actualizacion_meteo.json
+          git add meteo_daily.csv data/meteo_sitios data/estado_actualizacion_meteo.json
           if git diff --cached --quiet; then
             echo "No hay cambios meteorológicos."
             exit 0
           fi
-          git commit -m "Actualiza meteorología Zavalla"
+          git commit -m "Actualiza meteorología multisitio LOLIUM"
           git pull --rebase origin "${GITHUB_REF_NAME}"
           git push origin "HEAD:${GITHUB_REF_NAME}"
