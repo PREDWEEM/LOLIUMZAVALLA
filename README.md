@@ -1,43 +1,49 @@
-# PREDWEEM LOLIUM — Selector geográfico sin lag / con lag
+# PREDWEEM LOLIUM — Modelo operativo automático por localidad
 
-Implementación adaptativa de PREDWEEM con selección del **sitio geográfico específico** y decisión supervisada entre dos hipótesis temporales de emergencia de *Lolium*:
+Aplicación multisitio para simular la emergencia de *Lolium* con una política de modelo definida previamente para cada localidad.
 
-- **modelo sin lag**: alerta anticipada;
-- **modelo con lag fijo**: señal filtrada desplazada el número de días configurado;
-- **ninguno confirmado**: diagnóstico posterior cuando tampoco se confirma la ventana con lag.
+## Selección automática del modelo
 
-El sistema no estima lags locales intermedios.
+La aplicación no solicita recuentos a campo ni utiliza inspecciones para elegir entre modelos.
 
-## Sitios disponibles
+| Localidad | Modelo operativo |
+|---|---|
+| Azul | Sin lag |
+| Balcarce | Sin lag |
+| Bordenave | Sin lag |
+| Lartigau | Sin lag |
+| Olavarría | Sin lag |
+| San Pedro | Sin lag |
+| Tres Arroyos | Sin lag |
+| Pergamino | Con lag fijo de 15 días |
+| Zavalla | Con lag fijo de 15 días |
 
-El catálogo `sitios_lolium.py` reúne todas las implementaciones geográficas LOLIUM accesibles de PREDWEEM:
+La regla está definida en `sitios_lolium.py` mediante los campos:
 
-| Sitio | Provincia | Histórico prioritario | Repositorio de referencia |
-|---|---|---|---|
-| Azul | Buenos Aires | ECMWF IFS / Open-Meteo | `PREDWEEM/LOLIUM_AZUL2026` |
-| Balcarce | Buenos Aires | **SIGA–INTA** | `PREDWEEM/LOLIUM_BAL2026` |
-| Bordenave | Buenos Aires | **SIGA–INTA** | `PREDWEEM/LOLIUM_BOR2026` |
-| Lartigau | Buenos Aires | ECMWF IFS / Open-Meteo | `PREDWEEM/LOLIUM_LARTIGAU-2026` |
-| Olavarría | Buenos Aires | ECMWF IFS / Open-Meteo | `PREDWEEM/LOLIUM_OLAVA2026` |
-| Pergamino | Buenos Aires | **SIGA–INTA** | `PREDWEEM/LOLIUM-PERGA2026` |
-| San Pedro | Buenos Aires | **SIGA–INTA** | `PREDWEEM/lolium_sanpedro2026` |
-| Tres Arroyos | Buenos Aires | **SIGA–INTA** | `PREDWEEM/loliumTA_2026` |
-| Zavalla | Santa Fe | ECMWF IFS / Open-Meteo | `PREDWEEM/LOLIUMZAVALLA` |
+```python
+modelo_operativo
+lag_operativo_dias
+```
 
-La selección geográfica cambia:
+La interfaz muestra, grafica y exporta únicamente el modelo operativo correspondiente al sitio seleccionado.
 
-- nombre, provincia y coordenadas del sitio;
-- latitud utilizada en ET0 Hargreaves;
-- archivo meteorológico operativo;
-- historial de inspecciones;
-- estado del selector;
-- nombres y metadatos de las exportaciones.
+## Sin recuentos de campo
 
-El motor adaptativo y sus umbrales científicos continúan siendo comunes. La calibración local definitiva debe sostenerse con validación de campo para cada sitio.
+Se eliminaron del flujo operativo:
+
+- formulario de inspección;
+- carga y restauración de conteos;
+- historial de plantas por metro cuadrado;
+- puntos de campo sobre la gráfica;
+- selección adaptativa mediante observaciones;
+- estado pendiente, provisional o confirmado basado en conteos;
+- exportación de inspecciones y estado del selector.
+
+Los archivos históricos de inspecciones pueden permanecer en el repositorio por compatibilidad, pero la aplicación no los lee ni los modifica.
 
 ## Meteorología multisitio
 
-`update_meteo.py` construye una serie independiente para cada localidad:
+Cada sitio utiliza una copia exacta de `meteo_daily.csv` proveniente de su repositorio geográfico público:
 
 ```text
 data/meteo_sitios/azul.csv
@@ -51,57 +57,30 @@ data/meteo_sitios/tres-arroyos.csv
 data/meteo_sitios/zavalla.csv
 ```
 
-### Jerarquía histórica
+`update_meteo.py` copia los archivos byte por byte, sin combinar fuentes, cambiar columnas ni volver a serializar el CSV. El workflow diario verifica tamaño y hash SHA-256 antes de guardar los cambios.
 
-En **Balcarce, Bordenave, Pergamino, San Pedro y Tres Arroyos**, el actualizador descarga el `meteo_daily.csv` consolidado del repositorio geográfico correspondiente y aplica esta jerarquía:
+## Resultados operativos
 
-1. observación **SIGA–INTA** como dato histórico prioritario;
-2. fila provisional ECMWF ya registrada por el repositorio geográfico cuando SIGA tiene un hueco;
-3. Open-Meteo ECMWF IFS únicamente para completar una fecha todavía ausente;
-4. Open-Meteo ECMWF IFS Forecast desde el día actual.
+La tabla y la descarga Excel utilizan nombres únicos para el modelo seleccionado:
 
-Una fila SIGA siempre reemplaza al respaldo modelado de la misma fecha. Si un sitio configurado como SIGA no aporta ninguna observación SIGA, la actualización se detiene y no guarda una serie completamente modelada como si fuera observada.
+- `EMERREL`;
+- `EMERAC`;
+- `TT_DESDE_PICO`;
+- `Termoinhibida_Operativa`;
+- `Umbral_Termoinhibicion_Operativo_C`;
+- `FACTOR_DECAIMIENTO_OPERATIVO`;
+- `DIAS_DESDE_PICO_OPERATIVO`;
+- `Modelo_Operativo`;
+- `Lag_Operativo_Dias`.
 
-En Azul, Lartigau, Olavarría y Zavalla se mantiene ECMWF IFS mediante Open-Meteo como histórico operativo dentro de esta aplicación multisitio.
+Las columnas internas del modelo alternativo se eliminan de la tabla y de la exportación operativa.
 
-Las columnas `Fuente`, `TipoDato` y `CalidadDato` permiten distinguir observaciones, reemplazos provisionales y pronóstico.
+## Ventana fenológica
 
-`meteo_daily.csv` se conserva como copia compatible de Zavalla.
+La ventana de decisión se calcula desde el primer pico del modelo operativo:
 
-El workflow **Actualizar meteorología multisitio LOLIUM** se ejecuta dos veces por día y también admite ejecución manual. Primero descarga y valida los nueve sitios; solo después escribe los archivos, evitando actualizaciones parciales.
-
-Para leer repositorios geográficos privados puede configurarse el secreto de Actions `PREDWEEM_REPOS_TOKEN` con permiso de lectura sobre esos repositorios. En repositorios públicos no es necesario.
-
-## Aislamiento de datos de campo
-
-Cada sitio mantiene archivos independientes:
-
-```text
-data/inspecciones/<sitio>.csv
-data/selector/<sitio>.json
-```
-
-Cambiar de localidad no mezcla conteos, decisiones ni estados operativos.
-
-## Parámetros térmicos de las hipótesis
-
-- modelo sin lag: termoinhibición cuando `Tmedia_5d >= 24 °C`;
-- modelo con lag: termoinhibición cuando `Tmedia_5d >= 20 °C`;
-- lag fijo predeterminado: `+15 días`;
-- ventana fenológica: `600–800 °Cd` desde el pico del modelo visible.
-
-## Selección mediante conteos
-
-1. Sin conteos: ambos modelos permanecen visibles.
-2. Primer conteo negativo: se solicita una segunda verificación.
-3. Dos conteos iniciales negativos: se selecciona automáticamente el modelo con lag fijo y se oculta el modelo sin lag.
-4. Una presencia positiva dentro de los dos conteos iniciales confirma el modelo sin lag.
-5. Una observación posterior en la ventana desplazada confirma el modelo con lag.
-6. Para rechazar ambos modelos se requiere una verificación negativa adicional en la ventana con lag.
-
-## Visualización
-
-Los flujos diarios se muestran como línea fina para auditoría. Las activaciones próximas se agrupan en campanas gaussianas suaves con área coloreada. Una vez seleccionado un modelo, solo permanecen sus pulsos y su ventana fenológica.
+- inicio: 600 °Cd;
+- límite: 800 °Cd.
 
 ## Ejecución
 
@@ -111,20 +90,15 @@ python update_meteo.py
 streamlit run app.py
 ```
 
-## Validación
+## Validación sintáctica
 
 ```bash
-python -m pytest -q
-python -m py_compile app.py predweem_core.py selector_adaptativo.py \
-  visualizacion_pulsos.py update_meteo.py config_zavalla.py sitios_lolium.py
+python -m py_compile app.py predweem_core.py visualizacion_pulsos.py \
+  update_meteo.py config_zavalla.py sitios_lolium.py
 ```
-
-## Persistencia
-
-Streamlit Community Cloud puede utilizar un sistema de archivos efímero. Las inspecciones pueden descargarse y restaurarse, pero para operación productiva se recomienda almacenamiento persistente externo.
 
 ## Autoría
 
 **PREDWEEM by Guillermo R. Chantre**
 
-PREDWEEM es una herramienta de soporte y no reemplaza el monitoreo a campo ni el criterio profesional agronómico.
+PREDWEEM es una herramienta de soporte para la toma de decisiones agronómicas.
