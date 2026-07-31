@@ -52,24 +52,19 @@ def _date_from_annotation(text: str) -> str:
 
 
 def _emergence_figure_with_phenology(*args: Any, **kwargs: Any):
-    """Añade los estados de macollaje a la ventana del gráfico principal."""
+    """Mantiene los límites fenológicos y elimina carteles superpuestos."""
     figure, x_range = _ORIGINAL_EMERGENCE_FIGURE(*args, **kwargs)
+    kept_annotations = []
 
     for annotation in figure.layout.annotations or ():
         text = str(annotation.text or "")
 
         if text == "<b>Ventana recomendada de intervención</b>":
-            annotation.update(
-                text=(
-                    "<b>Ventana recomendada de intervención</b><br>"
-                    "<span style='font-size:10px;'>"
-                    "2–3 macollos (600 °Cd) → 6 macollos (800 °Cd)"
-                    "</span>"
-                ),
-                y=0.965,
-                borderpad=6,
-            )
-        elif "<b>600 °Cd</b>" in text:
+            continue
+        if "<b>Primer pico válido</b>" in text:
+            continue
+
+        if "<b>600 °Cd</b>" in text:
             date_label = _date_from_annotation(text)
             annotation.update(
                 text=(
@@ -86,6 +81,13 @@ def _emergence_figure_with_phenology(*args: Any, **kwargs: Any):
                 )
             )
 
+        kept_annotations.append(annotation)
+
+    figure.update_layout(
+        annotations=kept_annotations,
+        showlegend=False,
+    )
+    figure.update_traces(showlegend=False)
     return figure, x_range
 
 
