@@ -59,7 +59,7 @@ def load_ann(base: str | Path = ".") -> PracticalANNModel:
 
 def canonicalize_weather(raw: pd.DataFrame) -> pd.DataFrame:
     data = raw.copy()
-    data.columns = [str(c).upper().strip() for c in data.columns]
+    data.columns = [str(column).upper().strip() for column in data.columns]
     data = data.rename(
         columns={
             "FECHA": "Fecha",
@@ -96,9 +96,7 @@ def canonicalize_weather(raw: pd.DataFrame) -> pd.DataFrame:
     missing_dates = expected.difference(pd.DatetimeIndex(data["Fecha"]))
     if len(missing_dates):
         preview = ", ".join(ts.strftime("%Y-%m-%d") for ts in missing_dates[:8])
-        raise ValueError(
-            f"La meteorología no es continua. Fechas faltantes: {preview}"
-        )
+        raise ValueError(f"La meteorología no es continua. Fechas faltantes: {preview}")
     return data
 
 
@@ -162,13 +160,13 @@ def surface_water_balance(
 
     water[0] = float(wmax) / 2.0
     exponent = max(float(kr_exponent), 0.0)
-    for i in range(1, len(water)):
-        relative = float(np.clip(water[i - 1] / float(wmax), 0.0, 1.0))
+    for index in range(1, len(water)):
+        relative = float(np.clip(water[index - 1] / float(wmax), 0.0, 1.0))
         kr = 1.0 if exponent == 0.0 else relative**exponent
-        kr_daily[i] = kr
-        evaporation = et[i] * float(ke) * kr
-        water[i] = np.clip(
-            water[i - 1] + prec[i] - evaporation,
+        kr_daily[index] = kr
+        evaporation = et[index] * float(ke) * kr
+        water[index] = np.clip(
+            water[index - 1] + prec[index] - evaporation,
             0.0,
             float(wmax),
         )
@@ -189,7 +187,6 @@ def cumulative_thermal_time_from_peak(
     daily_thermal_time: Iterable[float],
     peak_index: int | None,
 ) -> np.ndarray:
-    """Acumula tiempo térmico desde el primer pico de una hipótesis."""
     daily = np.asarray(daily_thermal_time, dtype=float)
     cumulative = np.full(len(daily), np.nan, dtype=float)
     if peak_index is None:
@@ -207,7 +204,6 @@ def phenology_window_dates(
     control_cd: float = 600.0,
     limit_cd: float = 800.0,
 ) -> tuple[pd.Timestamp | None, pd.Timestamp | None]:
-    """Devuelve las fechas en que se alcanzan 600 y 800 °Cd desde el pico."""
     control = float(control_cd)
     limit = float(limit_cd)
     if control < 0 or limit <= control:
@@ -240,10 +236,12 @@ def shift_signal(values: np.ndarray, lag_days: int) -> np.ndarray:
     if lag_days == 0:
         return values.copy()
     if lag_days > 0:
-        shifted[lag_days:] = values[:-lag_days]
+        if lag_days < len(values):
+            shifted[lag_days:] = values[:-lag_days]
     else:
-        k = abs(lag_days)
-        shifted[:-k] = values[k:]
+        offset = abs(lag_days)
+        if offset < len(values):
+            shifted[:-offset] = values[offset:]
     return shifted
 
 
@@ -260,7 +258,6 @@ def apply_termoinhibition_and_peak_filter(
     latency_jd: int,
     peak_threshold: float,
 ) -> tuple[np.ndarray, int | None]:
-    """Aplica filtros temporales a una hipótesis sin alterar la otra."""
     filtered = np.asarray(base_signal, dtype=float).copy()
     filtered[np.asarray(thermoinhibited, dtype=bool)] = 0.0
     filtered[np.asarray(julian_days, dtype=float) <= int(latency_jd)] = 0.0
@@ -271,6 +268,40 @@ def apply_termoinhibition_and_peak_filter(
     else:
         filtered[:peak_index] = 0.0
     return filtered, peak_index
+
+
+def apply_cohort_decay_weibull(
+    values: Iterable[float],
+    peak_index: int | None,
+    *,
+    tau_days: float,
+    beta: float,
+    intensity: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Aplica D(t)=exp[-(t/tau)^beta] desde el primer pico.
+
+    La mezcla aplicada es 1-intensidad*(1-D). El día del pico conserva factor
+    uno y los días previos no se modifican, reproduciendo el motor de Balcarce.
+    """
+
+    signal = np.asarray(values, dtype=float).copy()
+    factor = np.ones(len(signal), dtype=float)
+    days_since_peak = np.zeros(len(signal), dtype=float)
+    if peak_index is None or len(signal) == 0:
+        return signal, factor, days_since_peak
+
+    peak = int(peak_index)
+    if peak < 0 or peak >= len(signal):
+        raise IndexError("El índice del pico está fuera de la señal.")
+
+    tau = max(float(tau_days), 0.01)
+    shape = max(float(beta), 0.01)
+    mixing = float(np.clip(intensity, 0.0, 1.0))
+    days_since_peak = np.maximum(np.arange(len(signal), dtype=float) - peak, 0.0)
+    base_factor = np.exp(-np.power(days_since_peak / tau, shape))
+    base_factor[:peak] = 1.0
+    factor = 1.0 - mixing * (1.0 - base_factor)
+    return np.clip(signal * factor, 0.0, 1.0), factor, days_since_peak
 
 
 @dataclass
@@ -304,7 +335,6 @@ def simulate_dual(
     raw_ann = ann.predict(inputs)
     data["EMERREL_RAW_ANN"] = raw_ann
 
-    # Señal común hasta completar los filtros hídricos.
     emer_base = raw_ann.copy()
     data["Prec_3d"] = data["Prec"].rolling(
         config.ventana_lluvia_dias,
@@ -353,16 +383,18 @@ def simulate_dual(
     data["Lluvia_Recarga"] = recharge
     emer_base[~recharge] = 0.0
 
-    # Cada hipótesis utiliza su propio umbral de termoinhibición.
-    data["Tmedia_5d"] = data["Tmedia_aire"].rolling(
+    thermal_column = f"Tmedia_{int(config.ventana_termica_dias)}d"
+    data[thermal_column] = data["Tmedia_aire"].rolling(
         config.ventana_termica_dias,
         min_periods=1,
     ).mean()
+    # Compatibilidad con las exportaciones previas, cuyo nombre era fijo.
+    data["Tmedia_5d"] = data[thermal_column]
     thermoinhibited_no_lag = (
-        data["Tmedia_5d"] >= config.umbral_termoinhibicion_c
+        data[thermal_column] >= config.umbral_termoinhibicion_c
     )
     thermoinhibited_lag = (
-        data["Tmedia_5d"] >= config.umbral_termoinhibicion_con_lag_c
+        data[thermal_column] >= config.umbral_termoinhibicion_con_lag_c
     )
     data["Termoinhibida"] = thermoinhibited_no_lag
     data["Termoinhibida_SIN_LAG"] = thermoinhibited_no_lag
@@ -382,34 +414,73 @@ def simulate_dual(
         latency_jd=config.latencia_jd,
         peak_threshold=config.umbral_primer_pico,
     )
-    emer_lag_before_shift, _ = apply_termoinhibition_and_peak_filter(
+    no_lag_before_decay = emer_no_lag.copy()
+
+    lag_unshifted, _ = apply_termoinhibition_and_peak_filter(
         emer_base,
         thermoinhibited=thermoinhibited_lag.to_numpy(),
         julian_days=julian,
         latency_jd=config.latencia_jd,
         peak_threshold=config.umbral_primer_pico,
     )
-    emer_lag = shift_signal(emer_lag_before_shift, int(lag_days))
+    emer_lag = shift_signal(lag_unshifted, int(lag_days))
     idx_lag = first_peak_index(emer_lag, config.umbral_primer_pico)
     if idx_lag is None:
         emer_lag[:] = 0.0
     else:
         emer_lag[:idx_lag] = 0.0
+    lag_before_decay = emer_lag.copy()
 
+    decay_active = bool(config.decaimiento_activo)
+    if decay_active:
+        emer_no_lag, factor_no_lag, days_no_lag = apply_cohort_decay_weibull(
+            emer_no_lag,
+            idx0,
+            tau_days=config.decaimiento_tau_dias,
+            beta=config.decaimiento_beta,
+            intensity=config.decaimiento_intensidad,
+        )
+        emer_lag, factor_lag, days_lag = apply_cohort_decay_weibull(
+            emer_lag,
+            idx_lag,
+            tau_days=config.decaimiento_tau_dias,
+            beta=config.decaimiento_beta,
+            intensity=config.decaimiento_intensidad,
+        )
+    else:
+        factor_no_lag = np.ones(len(data), dtype=float)
+        factor_lag = np.ones(len(data), dtype=float)
+        days_no_lag = np.zeros(len(data), dtype=float)
+        days_lag = np.zeros(len(data), dtype=float)
+
+    data["EMERREL_SIN_LAG_ANTES_DECAIMIENTO"] = no_lag_before_decay
+    data["FACTOR_DECAIMIENTO_SIN_LAG"] = factor_no_lag
+    data["DIAS_DESDE_PICO_SIN_LAG"] = days_no_lag
     data["EMERREL_SIN_LAG"] = emer_no_lag
-    data["EMERREL_CON_LAG_ANTES_DESPLAZAMIENTO"] = emer_lag_before_shift
+
+    data["EMERREL_CON_LAG_ANTES_DESPLAZAMIENTO"] = lag_unshifted
+    data["EMERREL_CON_LAG_ANTES_DECAIMIENTO"] = lag_before_decay
+    data["FACTOR_DECAIMIENTO_CON_LAG"] = factor_lag
+    data["DIAS_DESDE_PICO_CON_LAG"] = days_lag
     data["EMERREL_CON_LAG"] = emer_lag
+
+    data["Decaimiento_Activo"] = decay_active
+    data["Decaimiento_Tau_Dias"] = float(config.decaimiento_tau_dias)
+    data["Decaimiento_Beta"] = float(config.decaimiento_beta)
+    data["Decaimiento_Intensidad"] = float(config.decaimiento_intensidad)
+    data["Modelo_Referencia_Local"] = str(config.modelo_referencia_local)
+
     data["EMERAC_SIN_LAG"] = np.cumsum(emer_no_lag)
     data["EMERAC_CON_LAG"] = np.cumsum(emer_lag)
 
     data["GD_Tb2"] = [
         thermal_time_scalar(
-            t,
+            temperature,
             config.t_base_c,
             config.t_optima_c,
             config.t_critica_c,
         )
-        for t in data["Tmedia_aire"]
+        for temperature in data["Tmedia_aire"]
     ]
     data["TT_ACUM"] = data["GD_Tb2"].cumsum()
     data["TT_DESDE_PICO_SIN_LAG"] = cumulative_thermal_time_from_peak(
