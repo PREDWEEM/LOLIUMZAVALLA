@@ -14,6 +14,13 @@ EXPECTED_SITES = {
     "tres-arroyos",
     "zavalla",
 }
+EXPECTED_SIGA_SITES = {
+    "balcarce",
+    "bordenave",
+    "pergamino",
+    "san-pedro",
+    "tres-arroyos",
+}
 
 
 def test_registry_contains_all_lolium_geographic_repositories():
@@ -52,3 +59,12 @@ def test_zavalla_and_pergamino_metadata():
     assert zavalla.latitud == -33.02157
     assert pergamino.repositorio == "PREDWEEM/LOLIUM-PERGA2026"
     assert pergamino.longitud == -60.5745
+
+
+def test_exact_sites_with_siga_history_are_registered():
+    siga_sites = {
+        slug for slug, site in SITES.items() if site.usa_siga_historico
+    }
+    assert siga_sites == EXPECTED_SIGA_SITES
+    for slug in EXPECTED_SIGA_SITES:
+        assert SITES[slug].raw_meteo_url.endswith("/main/meteo_daily.csv")
