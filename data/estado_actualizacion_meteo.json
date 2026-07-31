@@ -1,442 +1,115 @@
 {
-  "modo": "multisitio",
-  "sitio_predeterminado": "zavalla",
-  "cantidad_sitios": 9,
+  "actualizado_en": "2026-07-31T02:06:08-03:00",
+  "modo": "COPIA_EXACTA_METEO_DAILY_PUBLICO",
+  "descripcion": "Cada archivo de data/meteo_sitios es una copia byte por byte del meteo_daily.csv público de su repositorio geográfico.",
   "sitios": {
     "azul": {
-      "sitio": "Azul (Buenos Aires)",
       "repositorio": "PREDWEEM/LOLIUM_AZUL2026",
-      "latitud": -36.87,
-      "longitud": -59.89,
-      "timezone": "America/Argentina/Buenos_Aires",
-      "archivo": "data/meteo_sitios/azul.csv",
-      "actualizado": "2026-07-31T01:43:58-03:00",
-      "inicio": "2026-01-01",
-      "fin": "2026-08-07",
-      "filas": 219,
-      "historico_prioritario": "meteo_daily.csv del repositorio geográfico",
-      "repositorio_historico": "PREDWEEM/LOLIUM_AZUL2026",
-      "url_historico": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_AZUL2026/main/meteo_daily.csv",
-      "filas_historico_repositorio": 92,
-      "filas_respaldo_open_meteo": 119,
-      "requiere_siga": false,
-      "filas_siga": 0,
-      "fuentes": [
-        {
-          "fuente": "ECMWF_IFS",
-          "tipo": "HISTORICO_MODELO",
-          "calidad": "Calidad_origen_no_declarada",
-          "filas": 1
-        },
-        {
-          "fuente": "ECMWF_IFS_HRES",
-          "tipo": "PRONOSTICO",
-          "calidad": "Calidad_origen_no_declarada",
-          "filas": 1
-        },
-        {
-          "fuente": "ERA5",
-          "tipo": "REANALISIS_FALLBACK",
-          "calidad": "Calidad_origen_no_declarada",
-          "filas": 90
-        },
-        {
-          "fuente": "OPEN_METEO_ECMWF_IFS_ARCHIVE_FALLBACK",
-          "tipo": "Provisional",
-          "calidad": "Provisional_hueco_repositorio",
-          "filas": 119
-        },
-        {
-          "fuente": "OPEN_METEO_ECMWF_IFS_FORECAST",
-          "tipo": "Pronostico",
-          "calidad": "Pronostico_operativo",
-          "filas": 8
-        }
-      ]
+      "rama": "main",
+      "archivo_origen": "meteo_daily.csv",
+      "url_origen": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_AZUL2026/main/meteo_daily.csv",
+      "url_solicitada": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_AZUL2026/main/meteo_daily.csv",
+      "archivo_destino": "data/meteo_sitios/azul.csv",
+      "bytes": 16528,
+      "sha256": "587fe9fa48be267ab6afe558622be0319e6717d2e5f41e38e8bee352fc760959",
+      "copia_exacta": true,
+      "repositorio_publico": true
     },
     "balcarce": {
-      "sitio": "Balcarce (Buenos Aires)",
       "repositorio": "PREDWEEM/LOLIUM_BAL2026",
-      "latitud": -37.7664,
-      "longitud": -58.2999,
-      "timezone": "America/Argentina/Buenos_Aires",
-      "archivo": "data/meteo_sitios/balcarce.csv",
-      "actualizado": "2026-07-31T01:44:00-03:00",
-      "inicio": "2026-01-01",
-      "fin": "2026-08-07",
-      "filas": 219,
-      "historico_prioritario": "meteo_daily.csv del repositorio geográfico",
-      "repositorio_historico": "PREDWEEM/LOLIUM_BAL2026",
-      "url_historico": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_BAL2026/main/meteo_daily.csv",
-      "filas_historico_repositorio": 92,
-      "filas_respaldo_open_meteo": 119,
-      "requiere_siga": true,
-      "filas_siga": 89,
-      "fuentes": [
-        {
-          "fuente": "ECMWF_IFS_ENS_025",
-          "tipo": "Pronostico",
-          "calidad": "Mediana_ensamble_P50",
-          "filas": 1
-        },
-        {
-          "fuente": "ECMWF_IFS_HISTORICO",
-          "tipo": "Provisional",
-          "calidad": "Provisional_hasta_reemplazo_SIGA",
-          "filas": 2
-        },
-        {
-          "fuente": "OPEN_METEO_ECMWF_IFS_ARCHIVE_FALLBACK",
-          "tipo": "Provisional",
-          "calidad": "Provisional_hueco_repositorio",
-          "filas": 119
-        },
-        {
-          "fuente": "OPEN_METEO_ECMWF_IFS_FORECAST",
-          "tipo": "Pronostico",
-          "calidad": "Pronostico_operativo",
-          "filas": 8
-        },
-        {
-          "fuente": "SIGA_INTA_BALCARCE",
-          "tipo": "Observado",
-          "calidad": "Observado_estacion",
-          "filas": 89
-        }
-      ]
+      "rama": "main",
+      "archivo_origen": "meteo_daily.csv",
+      "url_origen": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_BAL2026/main/meteo_daily.csv",
+      "url_solicitada": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_BAL2026/main/meteo_daily.csv",
+      "archivo_destino": "data/meteo_sitios/balcarce.csv",
+      "bytes": 32651,
+      "sha256": "362c9f65a302ab960605cb68990594ec08b717ced6692ed20bc3a73fa6ceb00e",
+      "copia_exacta": true,
+      "repositorio_publico": true
     },
     "bordenave": {
-      "sitio": "Bordenave (Buenos Aires)",
       "repositorio": "PREDWEEM/LOLIUM_BOR2026",
-      "latitud": -37.761671,
-      "longitud": -63.02,
-      "timezone": "America/Argentina/Buenos_Aires",
-      "archivo": "data/meteo_sitios/bordenave.csv",
-      "actualizado": "2026-07-31T01:44:01-03:00",
-      "inicio": "2026-01-01",
-      "fin": "2026-08-07",
-      "filas": 219,
-      "historico_prioritario": "meteo_daily.csv del repositorio geográfico",
-      "repositorio_historico": "PREDWEEM/LOLIUM_BOR2026",
-      "url_historico": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_BOR2026/main/meteo_daily.csv",
-      "filas_historico_repositorio": 92,
-      "filas_respaldo_open_meteo": 119,
-      "requiere_siga": true,
-      "filas_siga": 86,
-      "fuentes": [
-        {
-          "fuente": "ECMWF_IFS_ENS_025",
-          "tipo": "Pronostico",
-          "calidad": "Mediana_ensamble_P50",
-          "filas": 1
-        },
-        {
-          "fuente": "ECMWF_IFS_HISTORICO",
-          "tipo": "Provisional",
-          "calidad": "Provisional_hasta_reemplazo_SIGA",
-          "filas": 5
-        },
-        {
-          "fuente": "OPEN_METEO_ECMWF_IFS_ARCHIVE_FALLBACK",
-          "tipo": "Provisional",
-          "calidad": "Provisional_hueco_repositorio",
-          "filas": 119
-        },
-        {
-          "fuente": "OPEN_METEO_ECMWF_IFS_FORECAST",
-          "tipo": "Pronostico",
-          "calidad": "Pronostico_operativo",
-          "filas": 8
-        },
-        {
-          "fuente": "SIGA_INTA_BORDENAVE",
-          "tipo": "Observado",
-          "calidad": "Observado_estacion",
-          "filas": 86
-        }
-      ]
+      "rama": "main",
+      "archivo_origen": "meteo_daily.csv",
+      "url_origen": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_BOR2026/main/meteo_daily.csv",
+      "url_solicitada": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_BOR2026/main/meteo_daily.csv",
+      "archivo_destino": "data/meteo_sitios/bordenave.csv",
+      "bytes": 32784,
+      "sha256": "1d334a460cda54d758341a08f9d6a794cfca1e167dcac435c07388df36892482",
+      "copia_exacta": true,
+      "repositorio_publico": true
     },
     "lartigau": {
-      "sitio": "Lartigau (Buenos Aires)",
       "repositorio": "PREDWEEM/LOLIUM_LARTIGAU-2026",
-      "latitud": -38.6166,
-      "longitud": -61.7,
-      "timezone": "America/Argentina/Buenos_Aires",
-      "archivo": "data/meteo_sitios/lartigau.csv",
-      "actualizado": "2026-07-31T01:44:02-03:00",
-      "inicio": "2026-01-01",
-      "fin": "2026-08-07",
-      "filas": 219,
-      "historico_prioritario": "meteo_daily.csv del repositorio geográfico",
-      "repositorio_historico": "PREDWEEM/LOLIUM_LARTIGAU-2026",
-      "url_historico": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_LARTIGAU-2026/main/meteo_daily.csv",
-      "filas_historico_repositorio": 92,
-      "filas_respaldo_open_meteo": 119,
-      "requiere_siga": false,
-      "filas_siga": 0,
-      "fuentes": [
-        {
-          "fuente": "METEOBAHIA_XML_ARCHIVADO",
-          "tipo": "Historico_pronostico",
-          "calidad": "Pronostico_MeteoBahia_archivado_no_observado",
-          "filas": 91
-        },
-        {
-          "fuente": "METEOBAHIA_XML_CORONEL_FALCON",
-          "tipo": "Pronostico",
-          "calidad": "Pronostico_deterministico_Coronel_Falcon",
-          "filas": 1
-        },
-        {
-          "fuente": "OPEN_METEO_ECMWF_IFS_ARCHIVE_FALLBACK",
-          "tipo": "Provisional",
-          "calidad": "Provisional_hueco_repositorio",
-          "filas": 119
-        },
-        {
-          "fuente": "OPEN_METEO_ECMWF_IFS_FORECAST",
-          "tipo": "Pronostico",
-          "calidad": "Pronostico_operativo",
-          "filas": 8
-        }
-      ]
+      "rama": "main",
+      "archivo_origen": "meteo_daily.csv",
+      "url_origen": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_LARTIGAU-2026/main/meteo_daily.csv",
+      "url_solicitada": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_LARTIGAU-2026/main/meteo_daily.csv",
+      "archivo_destino": "data/meteo_sitios/lartigau.csv",
+      "bytes": 35871,
+      "sha256": "e9701b784ea7eed0227da7049941979d16d2d6408f41e1f6d7bd81115267d080",
+      "copia_exacta": true,
+      "repositorio_publico": true
     },
     "olavarria": {
-      "sitio": "Olavarría (Buenos Aires)",
       "repositorio": "PREDWEEM/LOLIUM_OLAVA2026",
-      "latitud": -36.8799,
-      "longitud": -60.216,
-      "timezone": "America/Argentina/Buenos_Aires",
-      "archivo": "data/meteo_sitios/olavarria.csv",
-      "actualizado": "2026-07-31T01:44:06-03:00",
-      "inicio": "2026-01-01",
-      "fin": "2026-08-07",
-      "filas": 219,
-      "historico_prioritario": "meteo_daily.csv del repositorio geográfico",
-      "repositorio_historico": "PREDWEEM/LOLIUM_OLAVA2026",
-      "url_historico": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_OLAVA2026/main/meteo_daily.csv",
-      "filas_historico_repositorio": 92,
-      "filas_respaldo_open_meteo": 119,
-      "requiere_siga": false,
-      "filas_siga": 0,
-      "fuentes": [
-        {
-          "fuente": "ECMWF_IFS",
-          "tipo": "HISTORICO_MODELO",
-          "calidad": "Calidad_origen_no_declarada",
-          "filas": 1
-        },
-        {
-          "fuente": "ECMWF_IFS_HRES",
-          "tipo": "PRONOSTICO",
-          "calidad": "Calidad_origen_no_declarada",
-          "filas": 1
-        },
-        {
-          "fuente": "ERA5",
-          "tipo": "REANALISIS_FALLBACK",
-          "calidad": "Calidad_origen_no_declarada",
-          "filas": 90
-        },
-        {
-          "fuente": "OPEN_METEO_ECMWF_IFS_ARCHIVE_FALLBACK",
-          "tipo": "Provisional",
-          "calidad": "Provisional_hueco_repositorio",
-          "filas": 119
-        },
-        {
-          "fuente": "OPEN_METEO_ECMWF_IFS_FORECAST",
-          "tipo": "Pronostico",
-          "calidad": "Pronostico_operativo",
-          "filas": 8
-        }
-      ]
+      "rama": "main",
+      "archivo_origen": "meteo_daily.csv",
+      "url_origen": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_OLAVA2026/main/meteo_daily.csv",
+      "url_solicitada": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_OLAVA2026/main/meteo_daily.csv",
+      "archivo_destino": "data/meteo_sitios/olavarria.csv",
+      "bytes": 16528,
+      "sha256": "5baea1f7594e50a517710c037df40e11d07521e3c646cf14d04913e178a35f87",
+      "copia_exacta": true,
+      "repositorio_publico": true
     },
     "pergamino": {
-      "sitio": "Pergamino (Buenos Aires)",
       "repositorio": "PREDWEEM/LOLIUM-PERGA2026",
-      "latitud": -33.9443,
-      "longitud": -60.5745,
-      "timezone": "America/Argentina/Buenos_Aires",
-      "archivo": "data/meteo_sitios/pergamino.csv",
-      "actualizado": "2026-07-31T01:47:18-03:00",
-      "inicio": "2026-01-01",
-      "fin": "2026-08-07",
-      "filas": 219,
-      "historico_prioritario": "meteo_daily.csv del repositorio geográfico",
-      "repositorio_historico": "PREDWEEM/LOLIUM-PERGA2026",
-      "url_historico": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM-PERGA2026/main/meteo_daily.csv",
-      "filas_historico_repositorio": 92,
-      "filas_respaldo_open_meteo": 119,
-      "requiere_siga": true,
-      "filas_siga": 86,
-      "fuentes": [
-        {
-          "fuente": "ECMWF_IFS_ENS_025",
-          "tipo": "Pronostico",
-          "calidad": "Mediana_ensamble_P50",
-          "filas": 1
-        },
-        {
-          "fuente": "ECMWF_IFS_HISTORICO",
-          "tipo": "Provisional",
-          "calidad": "Provisional_hasta_reemplazo_SIGA",
-          "filas": 5
-        },
-        {
-          "fuente": "OPEN_METEO_ECMWF_IFS_ARCHIVE_FALLBACK",
-          "tipo": "Provisional",
-          "calidad": "Provisional_hueco_repositorio",
-          "filas": 119
-        },
-        {
-          "fuente": "OPEN_METEO_ECMWF_IFS_FORECAST",
-          "tipo": "Pronostico",
-          "calidad": "Pronostico_operativo",
-          "filas": 8
-        },
-        {
-          "fuente": "SIGA_INTA_PERGAMINO",
-          "tipo": "Observado",
-          "calidad": "Observado_estacion",
-          "filas": 86
-        }
-      ]
+      "rama": "main",
+      "archivo_origen": "meteo_daily.csv",
+      "url_origen": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM-PERGA2026/main/meteo_daily.csv",
+      "url_solicitada": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM-PERGA2026/main/meteo_daily.csv",
+      "archivo_destino": "data/meteo_sitios/pergamino.csv",
+      "bytes": 32887,
+      "sha256": "3d853a9157e7f2d41a15dd1d226611f948c4bb508400880efdd78df0db9920f5",
+      "copia_exacta": true,
+      "repositorio_publico": true
     },
     "san-pedro": {
-      "sitio": "San Pedro (Buenos Aires)",
       "repositorio": "PREDWEEM/lolium_sanpedro2026",
-      "latitud": -33.7328,
-      "longitud": -59.7965,
-      "timezone": "America/Argentina/Buenos_Aires",
-      "archivo": "data/meteo_sitios/san-pedro.csv",
-      "actualizado": "2026-07-31T01:47:19-03:00",
-      "inicio": "2026-01-01",
-      "fin": "2026-08-07",
-      "filas": 219,
-      "historico_prioritario": "meteo_daily.csv del repositorio geográfico",
-      "repositorio_historico": "PREDWEEM/lolium_sanpedro2026",
-      "url_historico": "https://raw.githubusercontent.com/PREDWEEM/lolium_sanpedro2026/main/meteo_daily.csv",
-      "filas_historico_repositorio": 92,
-      "filas_respaldo_open_meteo": 119,
-      "requiere_siga": true,
-      "filas_siga": 89,
-      "fuentes": [
-        {
-          "fuente": "ECMWF_IFS_ENS_025",
-          "tipo": "Pronostico",
-          "calidad": "Mediana_ensamble_P50",
-          "filas": 1
-        },
-        {
-          "fuente": "ECMWF_IFS_HISTORICO",
-          "tipo": "Provisional",
-          "calidad": "Provisional_hasta_reemplazo_SIGA",
-          "filas": 2
-        },
-        {
-          "fuente": "OPEN_METEO_ECMWF_IFS_ARCHIVE_FALLBACK",
-          "tipo": "Provisional",
-          "calidad": "Provisional_hueco_repositorio",
-          "filas": 119
-        },
-        {
-          "fuente": "OPEN_METEO_ECMWF_IFS_FORECAST",
-          "tipo": "Pronostico",
-          "calidad": "Pronostico_operativo",
-          "filas": 8
-        },
-        {
-          "fuente": "SIGA_INTA_SAN_PEDRO_A872890",
-          "tipo": "Observado",
-          "calidad": "Observado_estacion",
-          "filas": 89
-        }
-      ]
+      "rama": "main",
+      "archivo_origen": "meteo_daily.csv",
+      "url_origen": "https://raw.githubusercontent.com/PREDWEEM/lolium_sanpedro2026/main/meteo_daily.csv",
+      "url_solicitada": "https://raw.githubusercontent.com/PREDWEEM/lolium_sanpedro2026/main/meteo_daily.csv",
+      "archivo_destino": "data/meteo_sitios/san-pedro.csv",
+      "bytes": 34633,
+      "sha256": "e1c7f94f92ad0ea279a01fba96cd8edfe5e9dcb85a3a0a686442fed975d3efb0",
+      "copia_exacta": true,
+      "repositorio_publico": true
     },
     "tres-arroyos": {
-      "sitio": "Tres Arroyos (Buenos Aires)",
       "repositorio": "PREDWEEM/loliumTA_2026",
-      "latitud": -38.45,
-      "longitud": -60.2763,
-      "timezone": "America/Argentina/Buenos_Aires",
-      "archivo": "data/meteo_sitios/tres-arroyos.csv",
-      "actualizado": "2026-07-31T01:47:24-03:00",
-      "inicio": "2026-01-01",
-      "fin": "2026-08-07",
-      "filas": 219,
-      "historico_prioritario": "meteo_daily.csv del repositorio geográfico",
-      "repositorio_historico": "PREDWEEM/loliumTA_2026",
-      "url_historico": "https://raw.githubusercontent.com/PREDWEEM/loliumTA_2026/main/meteo_daily.csv",
-      "filas_historico_repositorio": 92,
-      "filas_respaldo_open_meteo": 119,
-      "requiere_siga": true,
-      "filas_siga": 91,
-      "fuentes": [
-        {
-          "fuente": "ECMWF_IFS_ENS_025",
-          "tipo": "Pronostico",
-          "calidad": "Mediana_ensamble_P50",
-          "filas": 1
-        },
-        {
-          "fuente": "OPEN_METEO_ECMWF_IFS_ARCHIVE_FALLBACK",
-          "tipo": "Provisional",
-          "calidad": "Provisional_hueco_repositorio",
-          "filas": 119
-        },
-        {
-          "fuente": "OPEN_METEO_ECMWF_IFS_FORECAST",
-          "tipo": "Pronostico",
-          "calidad": "Pronostico_operativo",
-          "filas": 8
-        },
-        {
-          "fuente": "SIGA_INTA_TRES_ARROYOS_BARROW",
-          "tipo": "Observado",
-          "calidad": "Observado_estacion",
-          "filas": 91
-        }
-      ]
+      "rama": "main",
+      "archivo_origen": "meteo_daily.csv",
+      "url_origen": "https://raw.githubusercontent.com/PREDWEEM/loliumTA_2026/main/meteo_daily.csv",
+      "url_solicitada": "https://raw.githubusercontent.com/PREDWEEM/loliumTA_2026/main/meteo_daily.csv",
+      "archivo_destino": "data/meteo_sitios/tres-arroyos.csv",
+      "bytes": 34533,
+      "sha256": "88761fceecc21349c53e5fe805b39505bc29a6e56be25e5cd79287b9b8c8bd46",
+      "copia_exacta": true,
+      "repositorio_publico": true
     },
     "zavalla": {
-      "sitio": "Zavalla (Santa Fe)",
       "repositorio": "PREDWEEM/LOLIUMZAVALLA",
-      "latitud": -33.02157,
-      "longitud": -60.8793,
-      "timezone": "America/Argentina/Cordoba",
-      "archivo": "data/meteo_sitios/zavalla.csv",
-      "actualizado": "2026-07-31T01:50:33-03:00",
-      "inicio": "2026-01-01",
-      "fin": "2026-08-07",
-      "filas": 219,
-      "historico_prioritario": "meteo_daily.csv del repositorio geográfico",
-      "repositorio_historico": "PREDWEEM/LOLIUMZAVALLA",
-      "url_historico": "https://raw.githubusercontent.com/PREDWEEM/LOLIUMZAVALLA/main/meteo_daily.csv",
-      "filas_historico_repositorio": 92,
-      "filas_respaldo_open_meteo": 119,
-      "requiere_siga": false,
-      "filas_siga": 0,
-      "fuentes": [
-        {
-          "fuente": "OPEN_METEO_ECMWF_IFS_ARCHIVE",
-          "tipo": "Historico_modelo",
-          "calidad": "Calidad_origen_no_declarada",
-          "filas": 92
-        },
-        {
-          "fuente": "OPEN_METEO_ECMWF_IFS_ARCHIVE_FALLBACK",
-          "tipo": "Provisional",
-          "calidad": "Provisional_hueco_repositorio",
-          "filas": 119
-        },
-        {
-          "fuente": "OPEN_METEO_ECMWF_IFS_FORECAST",
-          "tipo": "Pronostico",
-          "calidad": "Pronostico_operativo",
-          "filas": 8
-        }
-      ]
+      "rama": "main",
+      "archivo_origen": "meteo_daily.csv",
+      "url_origen": "https://raw.githubusercontent.com/PREDWEEM/LOLIUMZAVALLA/main/meteo_daily.csv",
+      "url_solicitada": "https://raw.githubusercontent.com/PREDWEEM/LOLIUMZAVALLA/main/meteo_daily.csv",
+      "archivo_destino": "data/meteo_sitios/zavalla.csv",
+      "bytes": 27986,
+      "sha256": "ff8caf7eec5886c55a5a84af5f818779e310697dd8c3b05f0d0e708dcd91ecfb",
+      "copia_exacta": true,
+      "repositorio_publico": true
     }
   }
 }
