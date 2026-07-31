@@ -106,7 +106,7 @@ def _add_intervention_window(figure, control, limit, final_date):
     figure.add_vrect(
         x0=control,
         x1=end,
-        fillcolor="rgba(245,158,11,0.13)",
+        fillcolor="rgba(245,158,11,0.28)",
         layer="below",
         line_width=0,
     )
