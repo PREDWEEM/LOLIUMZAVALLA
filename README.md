@@ -27,6 +27,14 @@ lag_operativo_dias
 
 La interfaz muestra, grafica y exporta únicamente el modelo operativo correspondiente al sitio seleccionado.
 
+## Ajuste visible
+
+La única variable de ajuste disponible en la interfaz es:
+
+- **Cobertura de rastrojo (%)**.
+
+Wmax, exponente Kr, termoinhibición, latencia, umbrales de lluvia, decaimiento y lag operativo permanecen fijados por la calibración específica de cada localidad. Estos parámetros se utilizan internamente, pero no se muestran como controles de usuario.
+
 ## Sin recuentos de campo
 
 Se eliminaron del flujo operativo:
@@ -59,6 +67,25 @@ data/meteo_sitios/zavalla.csv
 
 `update_meteo.py` copia los archivos byte por byte, sin combinar fuentes, cambiar columnas ni volver a serializar el CSV. El workflow diario verifica tamaño y hash SHA-256 antes de guardar los cambios.
 
+## Reloj de grados-día fenológico
+
+El reloj se inicia en el primer pico del modelo operativo y acumula `GD_Tb2` hasta la fecha meteorológica vigente.
+
+Los hitos son:
+
+- **600 °Cd:** inicio de la ventana de máxima susceptibilidad;
+- **800 °Cd:** límite operativo de la ventana fenológica.
+
+La interfaz muestra:
+
+- grados-día acumulados desde el pico;
+- estado fenológico actual;
+- grados-día restantes hasta 600 o 800 °Cd;
+- fechas previstas o alcanzadas para ambos hitos;
+- indicador gráfico de avance.
+
+La descarga Excel incluye una hoja `Reloj_Fenologico`.
+
 ## Resultados operativos
 
 La tabla y la descarga Excel utilizan nombres únicos para el modelo seleccionado:
@@ -74,13 +101,6 @@ La tabla y la descarga Excel utilizan nombres únicos para el modelo seleccionad
 - `Lag_Operativo_Dias`.
 
 Las columnas internas del modelo alternativo se eliminan de la tabla y de la exportación operativa.
-
-## Ventana fenológica
-
-La ventana de decisión se calcula desde el primer pico del modelo operativo:
-
-- inicio: 600 °Cd;
-- límite: 800 °Cd.
 
 ## Ejecución
 
