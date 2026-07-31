@@ -237,7 +237,7 @@ def _add_emergence_traces(figure, data, smooth, scale_mode, style, peak):
         customdata = np.column_stack([data["EMERREL_PCT"], data["EMERREL"]])
         bar_hover = (
             "<b>%{x|%d-%m-%Y}</b><br>"
-            "Emergencia relativa: %{customdata[0]:.1f}%<br>"
+            "Intensidad relativa de emergencia: %{customdata[0]:.1f}%<br>"
             "EMERREL: %{customdata[1]:.3f}<extra></extra>"
         )
         smooth_hover = (
@@ -385,7 +385,7 @@ def emergence_figure(
             "text": (
                 "Log10(EMERREL + 0,01)"
                 if scientific
-                else "Emergencia relativa (%)"
+                else "Intensidad relativa de emergencia (%)"
             ),
             "standoff": 13,
         },
@@ -411,7 +411,7 @@ def emergence_figure(
     scale_label = (
         "Escala científica log10"
         if scientific
-        else "Escala operativa 0–100 %"
+        else "Intensidad relativa de emergencia 0–100 %"
     )
     subtitle = f"{site_name} · {model_name} · {scale_label}"
 
