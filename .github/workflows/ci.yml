@@ -27,7 +27,14 @@ jobs:
 
       - name: Compilar módulos
         run: |
-          python -m py_compile app.py predweem_core.py selector_adaptativo.py update_meteo.py config_zavalla.py
+          python -m py_compile \
+            app.py \
+            predweem_core.py \
+            selector_adaptativo.py \
+            visualizacion_pulsos.py \
+            update_meteo.py \
+            config_zavalla.py \
+            sitios_lolium.py
 
       - name: Ejecutar pruebas
         run: pytest -q
