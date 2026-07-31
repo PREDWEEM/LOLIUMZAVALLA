@@ -4,6 +4,7 @@ import io
 from dataclasses import replace
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -16,6 +17,9 @@ from visualizacion_pulsos import construir_campanas_agrupadas
 
 BASE = Path(__file__).resolve().parent
 LEGACY_METEO_PATH = BASE / "meteo_daily.csv"
+LOG_OFFSET = 0.01
+LOG_Y_RANGE = [-2.18, 0.12]
+LOG_Y_TICKS = [-2.0, -1.5, -1.0, -0.5, 0.0]
 
 st.set_page_config(
     page_title="PREDWEEM LOLIUM Multisitio",
@@ -144,6 +148,9 @@ def build_operational_data(
         raise ValueError(f"Modelo operativo desconocido: {model_mode}")
 
     out["EMERREL"] = out[value_column]
+    out["EMERREL_LOG"] = np.log10(
+        out["EMERREL"].clip(lower=0.0) + LOG_OFFSET
+    )
     out["EMERAC"] = out[cumulative_column]
     out["TT_DESDE_PICO"] = out[thermal_column]
     out["Termoinhibida_Operativa"] = out[termoinhibition_column]
@@ -154,7 +161,9 @@ def build_operational_data(
     out["Lag_Operativo_Dias"] = int(lag_days if model_mode == "con_lag" else 0)
     out["Modelo_Referencia_Local"] = model_mode
 
-    selected_candidates = out.index[out["EMERREL"] > float(CONFIG.umbral_primer_pico)]
+    selected_candidates = out.index[
+        out["EMERREL"] > float(CONFIG.umbral_primer_pico)
+    ]
     peak = (
         pd.Timestamp(out.loc[selected_candidates[0], "Fecha"])
         if len(selected_candidates)
@@ -189,9 +198,13 @@ def phenology_clock_state(
 
     forecast_target = today + pd.Timedelta(days=7)
     forecast_candidates = ordered.index[dates <= forecast_target].tolist()
-    forecast_index = forecast_candidates[-1] if forecast_candidates else current_index
+    forecast_index = (
+        forecast_candidates[-1] if forecast_candidates else current_index
+    )
     forecast_index = max(forecast_index, current_index)
-    forecast_date = pd.Timestamp(ordered.loc[forecast_index, "Fecha"]).normalize()
+    forecast_date = pd.Timestamp(
+        ordered.loc[forecast_index, "Fecha"]
+    ).normalize()
 
     current_raw = ordered.loc[current_index, "TT_DESDE_PICO"]
     forecast_raw = ordered.loc[forecast_index, "TT_DESDE_PICO"]
@@ -294,6 +307,8 @@ def add_grouped_pulses(
     *,
     model_name: str,
 ) -> pd.DataFrame:
+    """Grafica el modelo operativo en la escala logarítmica LOLIUM."""
+
     smooth = construir_campanas_agrupadas(
         data["Fecha"],
         data["EMERREL"],
@@ -302,34 +317,39 @@ def add_grouped_pulses(
         puntos_por_dia=6,
         sigma_min_dias=2.0,
     )
+    smooth["EMERREL_CAMPANA_LOG"] = np.log10(
+        smooth["EMERREL_CAMPANA"].clip(lower=0.0) + LOG_OFFSET
+    )
 
     figure.add_trace(
         go.Scatter(
             x=smooth["Fecha"],
-            y=smooth["EMERREL_CAMPANA"],
+            y=smooth["EMERREL_CAMPANA_LOG"],
+            customdata=smooth["EMERREL_CAMPANA"],
             name=f"Pulsos agrupados · {model_name}",
             mode="lines",
-            line={"color": "#111827", "width": 2.6, "shape": "spline"},
-            fill="tozeroy",
-            fillcolor="rgba(96, 165, 250, 0.22)",
-            showlegend=False,
+            line={"color": "#111827", "width": 2.2, "shape": "spline"},
+            opacity=0.82,
             hovertemplate=(
                 f"{model_name}<br>Fecha=%{{x|%d/%m/%Y}}"
-                "<br>Campana agrupada=%{y:.3f}<extra></extra>"
+                "<br>Log10(EMERREL + 0,01)=%{y:.3f}"
+                "<br>Campana agrupada=%{customdata:.3f}<extra></extra>"
             ),
         )
     )
     figure.add_trace(
         go.Scatter(
             x=data["Fecha"],
-            y=data["EMERREL"],
-            name=model_name,
+            y=data["EMERREL_LOG"],
+            customdata=data["EMERREL"],
+            name="Tasa diaria simulada (log)",
             mode="lines",
-            line={"color": "#1677d2", "width": 1.6},
-            opacity=0.95,
+            line={"color": "#075FCF", "width": 2.4},
+            opacity=0.98,
             hovertemplate=(
-                f"{model_name}<br>Fecha=%{{x|%d/%m/%Y}}"
-                "<br>EMERREL diaria=%{y:.3f}<extra></extra>"
+                "<b>%{x|%d-%m-%Y}</b><br>"
+                "Log10(EMERREL + 0,01): %{y:.3f}<br>"
+                "EMERREL: %{customdata:.3f}<extra></extra>"
             ),
         )
     )
@@ -469,7 +489,9 @@ summary_metrics = st.columns(2)
 summary_metrics[0].metric("Cobertura de rastrojo", f"{coverage}%")
 summary_metrics[1].metric(
     "Primer pico",
-    operational_peak.strftime("%d/%m/%Y") if operational_peak is not None else "—",
+    operational_peak.strftime("%d/%m/%Y")
+    if operational_peak is not None
+    else "—",
 )
 
 fig = go.Figure()
@@ -493,16 +515,29 @@ fig.update_layout(
         "x": 0.0,
         "xanchor": "left",
     },
-    xaxis={"title": "Fecha", "showgrid": False, "zeroline": False},
-    yaxis={
-        "title": "EMERREL",
-        "range": [0.0, 1.05],
+    xaxis={
+        "title": "Fecha",
+        "showgrid": False,
+        "showline": True,
+        "linecolor": "#6B7280",
+        "ticks": "outside",
         "zeroline": False,
-        "gridcolor": "rgba(148, 163, 184, 0.22)",
+    },
+    yaxis={
+        "title": "Log10(EMERREL + 0,01)",
+        "range": LOG_Y_RANGE,
+        "tickmode": "array",
+        "tickvals": LOG_Y_TICKS,
+        "showgrid": True,
+        "gridcolor": "rgba(148, 163, 184, 0.28)",
+        "griddash": "dash",
+        "showline": True,
+        "linecolor": "#6B7280",
+        "zeroline": False,
     },
     hovermode="x unified",
     height=580,
-    margin={"l": 55, "r": 35, "t": 65, "b": 90},
+    margin={"l": 82, "r": 35, "t": 65, "b": 90},
     legend={
         "orientation": "h",
         "yanchor": "top",
@@ -511,16 +546,37 @@ fig.update_layout(
         "x": 0.0,
     },
 )
+fig.update_yaxes(fixedrange=False)
+fig.update_xaxes(fixedrange=False)
 
 col_main, col_gauge = st.columns([3.4, 1])
 
 with col_main:
-    st.plotly_chart(fig, width="stretch")
-    st.caption(
-        "La línea fina representa EMERREL diaria. La envolvente agrupa "
-        "activaciones cercanas como pulsos suaves."
+    st.plotly_chart(
+        fig,
+        width="stretch",
+        config={
+            "displaylogo": False,
+            "responsive": True,
+            "scrollZoom": True,
+            "modeBarButtonsToRemove": ["lasso2d", "select2d"],
+            "toImageButtonOptions": {
+                "format": "png",
+                "filename": f"PREDWEEM_{site.slug}_emergencia_log",
+                "height": 1000,
+                "width": 2000,
+                "scale": 2,
+            },
+        },
     )
-    st.caption(f"Ventana fenológica: {format_window(control_date, limit_date)}")
+    st.caption(
+        "El eje Y representa Log10(EMERREL + 0,01), igual que en los "
+        "repositorios LOLIUM. Los valores originales de EMERREL se conservan "
+        "en la tabla, la descarga y el cursor del gráfico."
+    )
+    st.caption(
+        f"Ventana fenológica: {format_window(control_date, limit_date)}"
+    )
 
 with col_gauge:
     gauge_figure = build_lolium_clock_figure(
@@ -545,7 +601,9 @@ with st.expander("Resultados diarios del modelo operativo"):
                     "Latitud": site.latitud,
                     "Longitud": site.longitud,
                     "Repositorio_origen": site.repositorio,
-                    "Archivo_meteorologico": str(meteo_path.relative_to(BASE)),
+                    "Archivo_meteorologico": str(
+                        meteo_path.relative_to(BASE)
+                    ),
                     "Fuente_meteorologica_activa": weather_source,
                     "Modelo_operativo": model_name,
                     "Lag_operativo_dias": (
@@ -554,12 +612,19 @@ with st.expander("Resultados diarios del modelo operativo"):
                         else 0
                     ),
                     "Cobertura_rastrojo_pct": coverage,
+                    "Transformacion_grafica_Y": (
+                        "log10(EMERREL + 0.01)"
+                    ),
                     "Seleccion_automatica": True,
                     "Usa_recuento_campo": False,
                 }
             ]
         ).to_excel(writer, sheet_name="Sitio", index=False)
-        plot_data.to_excel(writer, sheet_name="Simulacion_Operativa", index=False)
+        plot_data.to_excel(
+            writer,
+            sheet_name="Simulacion_Operativa",
+            index=False,
+        )
         pd.DataFrame(
             [
                 {
@@ -576,7 +641,11 @@ with st.expander("Resultados diarios del modelo operativo"):
                 }
             ]
         ).to_excel(writer, sheet_name="Reloj_Fenologico", index=False)
-        smooth_export.to_excel(writer, sheet_name="Pulsos_Agrupados", index=False)
+        smooth_export.to_excel(
+            writer,
+            sheet_name="Pulsos_Agrupados",
+            index=False,
+        )
 
     st.download_button(
         "Descargar resultados completos",
