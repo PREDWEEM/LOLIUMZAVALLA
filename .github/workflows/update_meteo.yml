@@ -17,8 +17,6 @@ jobs:
   actualizar:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      PREDWEEM_REPOS_TOKEN: ${{ secrets.PREDWEEM_REPOS_TOKEN }}
 
     steps:
       - name: Descargar repositorio multisitio
@@ -34,14 +32,7 @@ jobs:
       - name: Instalar dependencia
         run: python -m pip install requests
 
-      - name: Verificar token de repositorios
-        run: |
-          if [ -z "$PREDWEEM_REPOS_TOKEN" ]; then
-            echo "::error::Falta el secreto PREDWEEM_REPOS_TOKEN."
-            exit 1
-          fi
-
-      - name: Copiar exactamente meteo_daily.csv de cada repositorio
+      - name: Copiar exactamente meteo_daily.csv públicos
         run: python update_meteo.py
 
       - name: Verificar identidad byte por byte
@@ -58,8 +49,8 @@ jobs:
               raise SystemExit("No se generó el estado de actualización.")
 
           state = json.loads(state_path.read_text(encoding="utf-8"))
-          if state.get("modo") != "COPIA_EXACTA_METEO_DAILY":
-              raise SystemExit("La actualización no quedó en modo de copia exacta.")
+          if state.get("modo") != "COPIA_EXACTA_METEO_DAILY_PUBLICO":
+              raise SystemExit("La actualización no quedó en modo de copia exacta pública.")
 
           for site in ordered_sites():
               path = site.meteo_path(".")
