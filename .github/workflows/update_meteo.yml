@@ -1,123 +1,112 @@
-name: Actualizar meteorología multisitio LOLIUM
+name: Copiar meteorología exacta multisitio LOLIUM
 
 on:
   workflow_dispatch:
   schedule:
+    # Todos los días a las 07:30 de Argentina (10:30 UTC).
     - cron: '30 10 * * *'
-    - cron: '30 18 * * *'
 
 permissions:
   contents: write
 
 concurrency:
-  group: meteo-multisitio-lolium-${{ github.ref }}
+  group: copia-exacta-meteo-lolium-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   actualizar:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     env:
       PREDWEEM_REPOS_TOKEN: ${{ secrets.PREDWEEM_REPOS_TOKEN }}
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Descargar repositorio multisitio
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - name: Configurar Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Instalar dependencias
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install pandas requests
+      - name: Instalar dependencia
+        run: python -m pip install requests
 
-      - name: Leer meteo_daily y pronóstico de todos los sitios
+      - name: Verificar token de repositorios
+        run: |
+          if [ -z "$PREDWEEM_REPOS_TOKEN" ]; then
+            echo "::error::Falta el secreto PREDWEEM_REPOS_TOKEN."
+            exit 1
+          fi
+
+      - name: Copiar exactamente meteo_daily.csv de cada repositorio
         run: python update_meteo.py
 
-      - name: Validar archivos multisitio y procedencia por repositorio
+      - name: Verificar identidad byte por byte
         run: |
           python - <<'PY'
+          import hashlib
           import json
-          import pandas as pd
-          from sitios_lolium import ordered_sites
+          from pathlib import Path
 
-          required = {
-              'Fecha', 'TMAX', 'TMIN', 'Prec', 'Fuente',
-              'TipoDato', 'CalidadDato', 'Emision'
-          }
-          with open('data/estado_actualizacion_meteo.json', encoding='utf-8') as handle:
-              state = json.load(handle)
+          from sitios_lolium import DEFAULT_SITE_SLUG, ordered_sites
+
+          state_path = Path("data/estado_actualizacion_meteo.json")
+          if not state_path.is_file():
+              raise SystemExit("No se generó el estado de actualización.")
+
+          state = json.loads(state_path.read_text(encoding="utf-8"))
+          if state.get("modo") != "COPIA_EXACTA_METEO_DAILY":
+              raise SystemExit("La actualización no quedó en modo de copia exacta.")
 
           for site in ordered_sites():
-              path = site.meteo_path('.')
+              path = site.meteo_path(".")
               if not path.is_file():
-                  raise SystemExit(f'No se generó {path}')
-              df = pd.read_csv(path)
-              missing = required.difference(df.columns)
-              if missing:
-                  raise SystemExit(f'{site.nombre}: faltan columnas {sorted(missing)}')
-              df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
-              if df.empty or df['Fecha'].isna().any() or df['Fecha'].duplicated().any():
-                  raise SystemExit(
-                      f'{site.nombre}: fechas inválidas, duplicadas o serie vacía.'
-                  )
-              if df[['TMAX', 'TMIN', 'Prec']].isna().any().any():
-                  raise SystemExit(f'{site.nombre}: hay datos meteorológicos nulos.')
-              if (df['TMAX'] < df['TMIN']).any() or (df['Prec'] < 0).any():
-                  raise SystemExit(
-                      f'{site.nombre}: inconsistencia física en la serie.'
-                  )
-              expected = pd.date_range(df['Fecha'].min(), df['Fecha'].max(), freq='D')
-              if len(expected.difference(pd.DatetimeIndex(df['Fecha']))):
-                  raise SystemExit(
-                      f'{site.nombre}: la serie meteorológica no es continua.'
-                  )
+                  raise SystemExit(f"No se generó {path}")
 
-              site_state = state['sitios'].get(site.slug, {})
-              repository_rows = int(
-                  site_state.get('filas_historico_repositorio', 0)
-              )
-              if repository_rows <= 0:
-                  raise SystemExit(
-                      f'{site.nombre}: no se conservaron filas históricas '
-                      'de meteo_daily.csv del repositorio.'
-                  )
-              expected_url = site.raw_meteo_url
-              if site_state.get('url_historico') != expected_url:
-                  raise SystemExit(
-                      f'{site.nombre}: URL histórica distinta de {expected_url}.'
-                  )
+              content = path.read_bytes()
+              digest = hashlib.sha256(content).hexdigest()
+              site_state = state.get("sitios", {}).get(site.slug, {})
 
-              siga_rows = df['Fuente'].astype(str).str.contains(
-                  'SIGA', case=False
-              ).sum()
-              if site.usa_siga_historico and siga_rows == 0:
-                  raise SystemExit(
-                      f'{site.nombre}: estaba configurado con SIGA, '
-                      'pero el archivo final no contiene observaciones SIGA.'
-                  )
+              if not site_state.get("copia_exacta"):
+                  raise SystemExit(f"{site.nombre}: copia exacta no confirmada.")
+              if digest != site_state.get("sha256"):
+                  raise SystemExit(f"{site.nombre}: el hash SHA-256 no coincide.")
+              if len(content) != int(site_state.get("bytes", -1)):
+                  raise SystemExit(f"{site.nombre}: el tamaño no coincide.")
 
-              print(
-                  site.nombre,
-                  len(df),
-                  df['Fecha'].min().date(),
-                  df['Fecha'].max().date(),
-                  'filas_repositorio=', repository_rows,
-                  'filas_SIGA=', int(siga_rows),
+              print(site.nombre, path, len(content), digest)
+
+          default_site = next(
+              site for site in ordered_sites()
+              if site.slug == DEFAULT_SITE_SLUG
+          )
+          root_digest = hashlib.sha256(
+              Path("meteo_daily.csv").read_bytes()
+          ).hexdigest()
+          default_digest = hashlib.sha256(
+              default_site.meteo_path(".").read_bytes()
+          ).hexdigest()
+          if root_digest != default_digest:
+              raise SystemExit(
+                  "meteo_daily.csv raíz no coincide exactamente con Zavalla."
               )
           PY
 
-      - name: Guardar actualización
+      - name: Guardar actualización diaria
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add meteo_daily.csv data/meteo_sitios data/estado_actualizacion_meteo.json
+
           if git diff --cached --quiet; then
-            echo "No hay cambios meteorológicos."
+            echo "Los archivos originales no cambiaron."
             exit 0
           fi
-          git commit -m "Actualiza meteorología multisitio LOLIUM"
+
+          git commit -m "Copia exacta diaria de meteo_daily multisitio"
           git pull --rebase origin "${GITHUB_REF_NAME}"
           git push origin "HEAD:${GITHUB_REF_NAME}"
