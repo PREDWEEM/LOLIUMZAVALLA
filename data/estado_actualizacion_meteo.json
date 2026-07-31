@@ -1,5 +1,5 @@
 {
-  "actualizado_en": "2026-07-31T02:06:08-03:00",
+  "actualizado_en": "2026-07-31T09:25:04-03:00",
   "modo": "COPIA_EXACTA_METEO_DAILY_PUBLICO",
   "descripcion": "Cada archivo de data/meteo_sitios es una copia byte por byte del meteo_daily.csv público de su repositorio geográfico.",
   "sitios": {
@@ -22,8 +22,8 @@
       "url_origen": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_BAL2026/main/meteo_daily.csv",
       "url_solicitada": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_BAL2026/main/meteo_daily.csv",
       "archivo_destino": "data/meteo_sitios/balcarce.csv",
-      "bytes": 32651,
-      "sha256": "362c9f65a302ab960605cb68990594ec08b717ced6692ed20bc3a73fa6ceb00e",
+      "bytes": 32733,
+      "sha256": "ccdffc48199a30cc7329ca2edf27ecf08082b718aa78eb2d40424dee8bb73e42",
       "copia_exacta": true,
       "repositorio_publico": true
     },
