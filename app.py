@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import io
-import math
 from dataclasses import replace
 from pathlib import Path
 
@@ -179,113 +178,112 @@ def phenology_clock_state(
     control_cd: float,
     limit_cd: float,
 ) -> dict[str, object]:
+    """Replica el reloj térmico operativo de los repositorios LOLIUM."""
+
     ordered = data.sort_values("Fecha").reset_index(drop=True)
-    available = ordered[ordered["Fecha"] <= today]
-    current_row = available.iloc[-1] if not available.empty else ordered.iloc[0]
-    current_date = pd.Timestamp(current_row["Fecha"]).normalize()
-    raw_tt = current_row.get("TT_DESDE_PICO")
-    tt_current = float(raw_tt) if pd.notna(raw_tt) else 0.0
-    tt_current = max(tt_current, 0.0)
+    dates = pd.to_datetime(ordered["Fecha"]).dt.normalize()
+
+    current_candidates = ordered.index[dates <= today].tolist()
+    current_index = current_candidates[-1] if current_candidates else 0
+    current_date = pd.Timestamp(ordered.loc[current_index, "Fecha"]).normalize()
+
+    forecast_target = today + pd.Timedelta(days=7)
+    forecast_candidates = ordered.index[dates <= forecast_target].tolist()
+    forecast_index = forecast_candidates[-1] if forecast_candidates else current_index
+    forecast_index = max(forecast_index, current_index)
+    forecast_date = pd.Timestamp(ordered.loc[forecast_index, "Fecha"]).normalize()
+
+    current_raw = ordered.loc[current_index, "TT_DESDE_PICO"]
+    forecast_raw = ordered.loc[forecast_index, "TT_DESDE_PICO"]
+    dga_today = float(current_raw) if pd.notna(current_raw) else 0.0
+    dga_7days = float(forecast_raw) if pd.notna(forecast_raw) else dga_today
+    dga_today = max(dga_today, 0.0)
+    dga_7days = max(dga_7days, dga_today)
 
     if operational_peak is None:
-        stage = "Esperando el primer pico de emergencia"
-        remaining_label = "Reloj aún no iniciado"
-        remaining_cd = float(control_cd)
-    elif current_date < pd.Timestamp(operational_peak).normalize() or pd.isna(raw_tt):
-        stage = "Reloj aún no iniciado"
-        remaining_label = "Faltan para 600 °Cd"
-        remaining_cd = float(control_cd)
-    elif tt_current < float(control_cd):
-        stage = "Acumulación térmica previa al control"
-        remaining_label = "Faltan para 600 °Cd"
-        remaining_cd = float(control_cd) - tt_current
-    elif tt_current < float(limit_cd):
-        stage = "Ventana fenológica de máxima susceptibilidad"
-        remaining_label = "Faltan para 800 °Cd"
-        remaining_cd = float(limit_cd) - tt_current
+        message = "Esperando pico de emergencia..."
+        status = "Reloj térmico aún no iniciado"
     else:
-        stage = "Ventana fenológica de 600–800 °Cd superada"
-        remaining_label = "Exceso sobre 800 °Cd"
-        remaining_cd = tt_current - float(limit_cd)
+        peak = pd.Timestamp(operational_peak).normalize()
+        message = (
+            f"Pico validado > {float(CONFIG.umbral_primer_pico):.2f} "
+            f"el {peak.strftime('%d/%m')}"
+        )
+        if dga_today < float(control_cd):
+            status = "Acumulación térmica previa al control"
+        elif dga_today < float(limit_cd):
+            status = "Ventana fenológica de máxima susceptibilidad"
+        else:
+            status = "Ventana fenológica de 600–800 °Cd superada"
 
     return {
-        "fecha": current_date,
-        "tt_actual": tt_current,
-        "estado": stage,
-        "etiqueta_restante": remaining_label,
-        "grados_restantes": max(remaining_cd, 0.0),
+        "fecha_hoy": current_date,
+        "fecha_pronostico": forecast_date,
+        "dga_hoy": dga_today,
+        "dga_7dias": dga_7days,
+        "mensaje": message,
+        "estado": status,
     }
 
 
-def build_phenology_clock_figure(
-    tt_current: float,
+def build_lolium_clock_figure(
+    dga_today: float,
+    dga_7days: float,
     *,
     control_cd: float,
     limit_cd: float,
-    stage: str,
+    message: str,
 ) -> go.Figure:
-    gauge_max = max(
-        float(limit_cd),
-        math.ceil(max(float(tt_current), float(limit_cd)) / 100.0) * 100.0,
-    )
-    tickvals = [0.0, float(control_cd), float(limit_cd)]
-    ticktext = ["0", f"{control_cd:.0f}", f"{limit_cd:.0f}"]
-    steps = [
-        {"range": [0.0, float(control_cd)], "color": "#dbeafe"},
-        {"range": [float(control_cd), float(limit_cd)], "color": "#dcfce7"},
-    ]
-    if gauge_max > float(limit_cd):
-        tickvals.append(gauge_max)
-        ticktext.append(f"{gauge_max:.0f}")
-        steps.append(
-            {"range": [float(limit_cd), gauge_max], "color": "#fee2e2"}
-        )
+    """Mismo formato de reloj utilizado en los repositorios LOLIUM."""
 
-    if tt_current < float(control_cd):
-        bar_color = "#2563eb"
-    elif tt_current < float(limit_cd):
-        bar_color = "#16a34a"
-    else:
-        bar_color = "#b91c1c"
+    max_axis = float(limit_cd) * 1.2
+    forecast_marker = min(max(float(dga_7days), 0.0), max_axis)
 
-    figure = go.Figure(
+    figure = go.Figure().add_trace(
         go.Indicator(
             mode="gauge+number",
-            value=float(tt_current),
-            number={"suffix": " °Cd", "font": {"size": 42}},
+            value=float(dga_today),
+            domain={"x": [0, 1], "y": [0, 1]},
             title={
-                "text": "Reloj fenológico<br><span style='font-size:0.75em'>"
-                "grados-día desde el primer pico</span>"
+                "text": "<b>TT POST-EMERGENCIA (°Cd)</b>",
+                "font": {"size": 18},
             },
             gauge={
-                "axis": {
-                    "range": [0.0, gauge_max],
-                    "tickvals": tickvals,
-                    "ticktext": ticktext,
-                },
-                "bar": {"color": bar_color, "thickness": 0.34},
-                "steps": steps,
+                "axis": {"range": [None, max_axis]},
+                "bar": {"color": "#1e293b", "thickness": 0.3},
+                "steps": [
+                    {"range": [0, float(control_cd)], "color": "#4ade80"},
+                    {
+                        "range": [float(control_cd), float(limit_cd)],
+                        "color": "#facc15",
+                    },
+                    {
+                        "range": [float(limit_cd), max_axis],
+                        "color": "#f87171",
+                    },
+                ],
                 "threshold": {
-                    "line": {"color": "#b45309", "width": 4},
+                    "line": {"color": "#2563eb", "width": 6},
                     "thickness": 0.8,
-                    "value": float(control_cd),
+                    "value": forecast_marker,
                 },
             },
         )
     )
     figure.add_annotation(
         x=0.5,
-        y=0.02,
-        xref="paper",
-        yref="paper",
-        text=stage,
+        y=-0.1,
+        text=(
+            f"{message}<br>"
+            f"Pronóstico +7d: <b>{float(dga_7days):.1f} °Cd</b>"
+        ),
         showarrow=False,
-        font={"size": 15},
+        font={"size": 14, "color": "#1e3a8a"},
+        align="center",
     )
     figure.update_layout(
-        height=330,
-        margin={"l": 30, "r": 30, "t": 65, "b": 35},
-        paper_bgcolor="rgba(0,0,0,0)",
+        height=350,
+        margin={"t": 80, "b": 50, "l": 30, "r": 30},
     )
     return figure
 
@@ -467,53 +465,12 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-summary_metrics = st.columns(3)
+summary_metrics = st.columns(2)
 summary_metrics[0].metric("Cobertura de rastrojo", f"{coverage}%")
 summary_metrics[1].metric(
     "Primer pico",
     operational_peak.strftime("%d/%m/%Y") if operational_peak is not None else "—",
 )
-summary_metrics[2].metric(
-    "Fecha térmica vigente",
-    pd.Timestamp(clock_state["fecha"]).strftime("%d/%m/%Y"),
-)
-
-st.subheader("⏱️ Reloj de grados-día fenológico")
-clock_column, clock_details = st.columns([1.45, 1.0])
-
-with clock_column:
-    clock_figure = build_phenology_clock_figure(
-        float(clock_state["tt_actual"]),
-        control_cd=site_config.tt_control_cd,
-        limit_cd=site_config.tt_limite_cd,
-        stage=str(clock_state["estado"]),
-    )
-    st.plotly_chart(clock_figure, width="stretch")
-
-with clock_details:
-    st.metric(
-        "Tiempo térmico desde el pico",
-        f"{float(clock_state['tt_actual']):.1f} °Cd",
-    )
-    st.metric(
-        str(clock_state["etiqueta_restante"]),
-        f"{float(clock_state['grados_restantes']):.1f} °Cd",
-    )
-    date_columns = st.columns(2)
-    date_columns[0].metric(
-        "Fecha 600 °Cd",
-        control_date.strftime("%d/%m/%Y") if control_date is not None else "—",
-    )
-    date_columns[1].metric(
-        "Fecha 800 °Cd",
-        limit_date.strftime("%d/%m/%Y") if limit_date is not None else "—",
-    )
-    progress = min(
-        float(clock_state["tt_actual"]) / float(site_config.tt_limite_cd),
-        1.0,
-    )
-    st.progress(progress)
-    st.info(str(clock_state["estado"]))
 
 fig = go.Figure()
 smooth_export = add_grouped_pulses(fig, plot_data, model_name=model_name)
@@ -554,12 +511,26 @@ fig.update_layout(
         "x": 0.0,
     },
 )
-st.plotly_chart(fig, width="stretch")
-st.caption(
-    "La línea fina representa EMERREL diaria. La envolvente agrupa "
-    "activaciones cercanas como pulsos suaves."
-)
-st.caption(f"Ventana fenológica: {format_window(control_date, limit_date)}")
+
+col_main, col_gauge = st.columns([3.4, 1])
+
+with col_main:
+    st.plotly_chart(fig, width="stretch")
+    st.caption(
+        "La línea fina representa EMERREL diaria. La envolvente agrupa "
+        "activaciones cercanas como pulsos suaves."
+    )
+    st.caption(f"Ventana fenológica: {format_window(control_date, limit_date)}")
+
+with col_gauge:
+    gauge_figure = build_lolium_clock_figure(
+        float(clock_state["dga_hoy"]),
+        float(clock_state["dga_7dias"]),
+        control_cd=site_config.tt_control_cd,
+        limit_cd=site_config.tt_limite_cd,
+        message=str(clock_state["mensaje"]),
+    )
+    st.plotly_chart(gauge_figure, width="stretch")
 
 with st.expander("Resultados diarios del modelo operativo"):
     st.dataframe(plot_data, width="stretch", hide_index=True)
@@ -594,8 +565,10 @@ with st.expander("Resultados diarios del modelo operativo"):
                 {
                     "Modelo": model_name,
                     "Fecha_primer_pico": operational_peak,
-                    "Fecha_reloj": clock_state["fecha"],
-                    "TT_actual_desde_pico_Cd": clock_state["tt_actual"],
+                    "Fecha_reloj": clock_state["fecha_hoy"],
+                    "TT_actual_desde_pico_Cd": clock_state["dga_hoy"],
+                    "Fecha_pronostico_7d": clock_state["fecha_pronostico"],
+                    "TT_pronostico_7d_Cd": clock_state["dga_7dias"],
                     "Estado_fenologico": clock_state["estado"],
                     "Fecha_600_Cd": control_date,
                     "Fecha_800_Cd": limit_date,
