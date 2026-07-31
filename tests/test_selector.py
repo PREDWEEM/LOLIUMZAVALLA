@@ -45,7 +45,7 @@ def test_first_negative_keeps_both_models_visible_and_requests_second_check():
     assert visible_models(decision) == (True, True)
 
 
-def test_two_negative_inspections_select_fixed_lag_and_hide_no_lag():
+def test_two_initial_negative_counts_automatically_select_lag():
     peak0 = pd.Timestamp("2026-03-20")
     peak15 = pd.Timestamp("2026-04-04")
     data = pd.DataFrame(
@@ -64,7 +64,25 @@ def test_two_negative_inspections_select_fixed_lag_and_hide_no_lag():
     assert visible_models(decision) == (False, True)
 
 
-def test_positive_after_one_negative_confirms_no_lag():
+def test_two_initial_negatives_select_lag_even_when_today_is_after_lag_window():
+    peak0 = pd.Timestamp("2026-03-20")
+    peak15 = pd.Timestamp("2026-04-04")
+    data = pd.DataFrame(
+        [inspection("2026-03-20"), inspection("2026-03-23")]
+    )
+    decision = evaluate_selector(
+        peak0,
+        peak15,
+        data,
+        today=pd.Timestamp("2026-04-20"),
+    )
+    assert decision.estado == "CON_LAG_PROVISIONAL"
+    assert decision.modelo_activo == "con_lag"
+    assert visible_models(decision) == (False, True)
+    assert "automáticamente" in decision.motivo.lower()
+
+
+def test_positive_as_second_initial_count_confirms_no_lag():
     peak0 = pd.Timestamp("2026-03-20")
     peak15 = pd.Timestamp("2026-04-04")
     data = pd.DataFrame(
@@ -121,14 +139,17 @@ def test_intermediate_positive_after_two_negatives_does_not_estimate_local_lag()
     assert decision.estado == "CON_LAG_PROVISIONAL"
     assert decision.modelo_activo == "con_lag"
     assert decision.lag_operativo_dias == 15
-    assert "local" in decision.motivo.lower()
 
 
-def test_no_emergence_in_both_windows_rejects_both_and_shows_diagnostic_curves():
+def test_additional_negative_in_lag_window_can_reject_both_models():
     peak0 = pd.Timestamp("2026-03-20")
     peak15 = pd.Timestamp("2026-04-04")
     data = pd.DataFrame(
-        [inspection("2026-03-20"), inspection("2026-03-23")]
+        [
+            inspection("2026-03-20"),
+            inspection("2026-03-23"),
+            inspection("2026-04-05"),
+        ]
     )
     decision = evaluate_selector(
         peak0,
