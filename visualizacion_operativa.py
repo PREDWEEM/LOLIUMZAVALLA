@@ -287,7 +287,9 @@ def _add_emergence_traces(figure, data, smooth, scale_mode, style, peak):
                     "dash": "dash" if style == "Académico" else "solid",
                     "shape": "spline",
                 },
-                opacity=0.62,
+                fill="tozeroy",
+                fillcolor="rgba(96, 165, 250, 0.12)",
+                opacity=0.75,
                 hovertemplate=smooth_hover,
             )
         )
