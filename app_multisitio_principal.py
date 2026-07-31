@@ -308,6 +308,13 @@ def run() -> None:
     st.write("")
 
     smooth = smooth_pulses(data)
+    smooth = smooth.drop(columns=["EMERREL_CAMPANA_LOG"], errors="ignore")
+    smooth["EMERREL_CAMPANA_PCT"] = (
+        smooth["EMERREL_CAMPANA"].clip(lower=0.0) * 100.0
+    )
+    smooth["LOG10_INTENSIDAD_CAMPANA_PCT_MAS_1"] = np.log10(
+        smooth["EMERREL_CAMPANA_PCT"] + 1.0
+    )
     smooth["Modelo"] = model_name
     smooth["Sitio"] = site.nombre
     figure, x_range = emergence_figure(
