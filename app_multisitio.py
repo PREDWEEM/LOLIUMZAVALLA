@@ -21,6 +21,7 @@ LOG_Y_RANGE = [-2.18, 0.12]
 LOG_Y_TICKS = [-2.0, -1.5, -1.0, -0.5, 0.0]
 CHART_STYLES = ("Operativo mejorado", "Minimalista", "Académico")
 MONTH_NAMES = {1:"Ene",2:"Feb",3:"Mar",4:"Abr",5:"May",6:"Jun",7:"Jul",8:"Ago",9:"Sep",10:"Oct",11:"Nov",12:"Dic"}
+_ANN = None
 
 
 def read_table(source):
@@ -28,9 +29,11 @@ def read_table(source):
     return pd.read_excel(source) if name.endswith((".xlsx", ".xls")) else pd.read_csv(source)
 
 
-@st.cache_resource
 def get_ann():
-    return load_ann(BASE)
+    global _ANN
+    if _ANN is None:
+        _ANN = load_ann(BASE)
+    return _ANN
 
 
 def resolve_weather(site, uploaded):
@@ -148,7 +151,7 @@ def emergence_figure(data, smooth, site_name, model_name, style, peak, control, 
     ticks, labels = monthly_ticks(data["Fecha"])
     title = {"Operativo mejorado":"Dinámica operativa de emergencia","Minimalista":"Emergencia simulada","Académico":"Dinámica temporal de emergencia simulada"}[style]
     subtitle = f"{site_name} · {model_name} · Escala Log10(EMERREL + 0,01)"
-    fig.update_layout(template="plotly_white",title={"text":f"<b>{title}</b><br><span style='font-size:13px;color:#64748b'>{subtitle}</span>","x":0,"xanchor":"left","font":{"size":21,"color":"#0f172a"}},xaxis={"title":{"text":"Fecha","standoff":14},"tickmode":"array","tickvals":ticks,"ticktext":labels,"tickfont":{"size":11,"color":"#475569"},"showgrid":False,"showline":True,"linecolor":"#94a3b8","ticks":"outside","ticklen":5,"zeroline":False,"automargin":True,"rangeslider":{"visible":False}},yaxis={"title":{"text":"Log10(EMERREL + 0,01)","standoff":13},"range":LOG_Y_RANGE,"tickmode":"array","tickvals":LOG_Y_TICKS,"tickfont":{"size":11,"color":"#475569"},"showgrid":True,"gridcolor":"rgba(148,163,184,.24)","griddash":"dash","showline":True,"linecolor":"#94a3b8","zeroline":False,"automargin":True},hovermode="x unified",hoverlabel={"bgcolor":"#fff","bordercolor":"#cbd5e1","font":{"size":12,"color":"#0f172a"}},height=550 if style=="Minimalista" else 620,margin={"l":82,"r":28,"t":112,"b":78},legend={"visible":style!="Minimalista","orientation":"h","yanchor":"bottom","y":1.10,"xanchor":"right","x":1,"bgcolor":"rgba(255,255,255,.92)","bordercolor":"rgba(148,163,184,.38)","borderwidth":1,"font":{"size":11,"color":"#334155"}},paper_bgcolor="#fff",plot_bgcolor="#fff",font={"family":"Arial, sans-serif","color":"#334155"},dragmode="zoom")
+    fig.update_layout(template="plotly_white",title={"text":f"<b>{title}</b><br><span style='font-size:13px;color:#64748b'>{subtitle}</span>","x":0,"xanchor":"left","font":{"size":21,"color":"#0f172a"}},xaxis={"title":{"text":"Fecha","standoff":14},"tickmode":"array","tickvals":ticks,"ticktext":labels,"tickfont":{"size":11,"color":"#475569"},"showgrid":False,"showline":True,"linecolor":"#94a3b8","ticks":"outside","ticklen":5,"zeroline":False,"automargin":True,"rangeslider":{"visible":False}},yaxis={"title":{"text":"Log10(EMERREL + 0,01)","standoff":13},"range":LOG_Y_RANGE,"tickmode":"array","tickvals":LOG_Y_TICKS,"tickfont":{"size":11,"color":"#475569"},"showgrid":True,"gridcolor":"rgba(148,163,184,.24)","griddash":"dash","showline":True,"linecolor":"#94a3b8","zeroline":False,"automargin":True},hovermode="x unified",hoverlabel={"bgcolor":"#fff","bordercolor":"#cbd5e1","font":{"size":12,"color":"#0f172a"}},height=550 if style=="Minimalista" else 620,margin={"l":82,"r":28,"t":112,"b":78},showlegend=style!="Minimalista",legend={"orientation":"h","yanchor":"bottom","y":1.10,"xanchor":"right","x":1,"bgcolor":"rgba(255,255,255,.92)","bordercolor":"rgba(148,163,184,.38)","borderwidth":1,"font":{"size":11,"color":"#334155"}},paper_bgcolor="#fff",plot_bgcolor="#fff",font={"family":"Arial, sans-serif","color":"#334155"},dragmode="zoom")
     fig.update_xaxes(fixedrange=False)
     fig.update_yaxes(fixedrange=False)
     return fig
