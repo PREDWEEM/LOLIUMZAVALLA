@@ -6,10 +6,10 @@ import plotly.graph_objects as go
 
 from config_zavalla import CONFIG
 
-LOG_OFFSET = 0.01
-LOG_Y_RANGE = [-2.18, 0.12]
-LOG_Y_TICKS = [-2.0, -1.5, -1.0, -0.5, 0.0]
-SCALE_MODES = ("Operativa (%)", "Científica (log10)")
+LOG_Y_RANGE = [0.0, 2.05]
+LOG_Y_TICKS = [0.0, 0.5, 1.0, 1.5, 2.0]
+SCIENTIFIC_SCALE = "Log10(Intensidad % + 1)"
+SCALE_MODES = ("Operativa (%)", SCIENTIFIC_SCALE)
 MONTH_NAMES = {
     1: "Ene",
     2: "Feb",
@@ -199,40 +199,51 @@ def _add_today_marker(figure, today, minimum, maximum):
 
 
 def _add_emergence_traces(figure, data, smooth, scale_mode, style, peak):
-    scientific = scale_mode == "Científica (log10)"
+    scientific = scale_mode == SCIENTIFIC_SCALE
     data = data.copy()
     smooth = smooth.copy()
+
     data["EMERREL_PCT"] = data["EMERREL"].clip(lower=0.0) * 100.0
-    data["EMERREL_LOG"] = np.log10(
-        data["EMERREL"].clip(lower=0.0) + LOG_OFFSET
-    )
+    data["EMERREL_LOG_PCT"] = np.log10(data["EMERREL_PCT"] + 1.0)
     smooth["EMERREL_CAMPANA_PCT"] = (
         smooth["EMERREL_CAMPANA"].clip(lower=0.0) * 100.0
     )
-    if "EMERREL_CAMPANA_LOG" not in smooth.columns:
-        smooth["EMERREL_CAMPANA_LOG"] = np.log10(
-            smooth["EMERREL_CAMPANA"].clip(lower=0.0) + LOG_OFFSET
-        )
+    smooth["EMERREL_CAMPANA_LOG_PCT"] = np.log10(
+        smooth["EMERREL_CAMPANA_PCT"] + 1.0
+    )
 
     if scientific:
-        baseline = LOG_Y_RANGE[0]
-        bar_values = data["EMERREL_LOG"] - baseline
-        bar_base = baseline
-        smooth_values = smooth["EMERREL_CAMPANA_LOG"]
-        customdata = np.column_stack([data["EMERREL_LOG"], data["EMERREL"]])
+        bar_values = data["EMERREL_LOG_PCT"]
+        bar_base = 0.0
+        smooth_values = smooth["EMERREL_CAMPANA_LOG_PCT"]
+        customdata = np.column_stack(
+            [
+                data["EMERREL_LOG_PCT"],
+                data["EMERREL_PCT"],
+                data["EMERREL"],
+            ]
+        )
         bar_hover = (
             "<b>%{x|%d-%m-%Y}</b><br>"
-            "Log10(EMERREL + 0,01): %{customdata[0]:.3f}<br>"
-            "EMERREL: %{customdata[1]:.3f}<extra></extra>"
+            "Log10(Intensidad % + 1): %{customdata[0]:.3f}<br>"
+            "Intensidad relativa: %{customdata[1]:.1f}%<br>"
+            "EMERREL: %{customdata[2]:.3f}<extra></extra>"
+        )
+        smooth_customdata = np.column_stack(
+            [
+                smooth["EMERREL_CAMPANA_PCT"],
+                smooth["EMERREL_CAMPANA"],
+            ]
         )
         smooth_hover = (
             "<b>%{x|%d-%m-%Y}</b><br>"
-            "Pulsos (log): %{y:.3f}<br>"
-            "EMERREL agrupada: %{customdata:.3f}<extra></extra>"
+            "Tendencia log10: %{y:.3f}<br>"
+            "Intensidad agrupada: %{customdata[0]:.1f}%<br>"
+            "EMERREL agrupada: %{customdata[1]:.3f}<extra></extra>"
         )
     else:
         bar_values = data["EMERREL_PCT"]
-        bar_base = 0
+        bar_base = 0.0
         smooth_values = smooth["EMERREL_CAMPANA_PCT"]
         customdata = np.column_stack([data["EMERREL_PCT"], data["EMERREL"]])
         bar_hover = (
@@ -240,6 +251,7 @@ def _add_emergence_traces(figure, data, smooth, scale_mode, style, peak):
             "Intensidad relativa de emergencia: %{customdata[0]:.1f}%<br>"
             "EMERREL: %{customdata[1]:.3f}<extra></extra>"
         )
+        smooth_customdata = smooth["EMERREL_CAMPANA"]
         smooth_hover = (
             "<b>%{x|%d-%m-%Y}</b><br>"
             "Pulsos agrupados: %{y:.1f}%<br>"
@@ -266,7 +278,7 @@ def _add_emergence_traces(figure, data, smooth, scale_mode, style, peak):
             go.Scatter(
                 x=smooth["Fecha"],
                 y=smooth_values,
-                customdata=smooth["EMERREL_CAMPANA"],
+                customdata=smooth_customdata,
                 name="Tendencia · pulsos agrupados",
                 mode="lines",
                 line={
@@ -287,16 +299,17 @@ def _add_emergence_traces(figure, data, smooth, scale_mode, style, peak):
         return
     peak_row = peak_rows.iloc[0]
     peak_y = (
-        float(peak_row["EMERREL_LOG"])
+        float(peak_row["EMERREL_LOG_PCT"])
         if scientific
         else float(peak_row["EMERREL_PCT"])
     )
     peak_emergence = float(peak_row["EMERREL"])
+    peak_intensity = float(peak_row["EMERREL_PCT"])
     figure.add_trace(
         go.Scatter(
             x=[peak],
             y=[peak_y],
-            customdata=[peak_emergence],
+            customdata=[[peak_emergence, peak_intensity]],
             name="Primer pico válido",
             mode="markers",
             marker={
@@ -307,7 +320,8 @@ def _add_emergence_traces(figure, data, smooth, scale_mode, style, peak):
             hovertemplate=(
                 "<b>Primer pico válido</b><br>"
                 "Fecha: %{x|%d-%m-%Y}<br>"
-                "EMERREL: %{customdata:.3f}<extra></extra>"
+                "Intensidad relativa: %{customdata[1]:.1f}%<br>"
+                "EMERREL: %{customdata[0]:.3f}<extra></extra>"
             ),
         )
     )
@@ -379,11 +393,11 @@ def emergence_figure(
     )
     ticks, labels = _monthly_ticks(data["Fecha"], x_range[0], x_range[1])
 
-    scientific = scale_mode == "Científica (log10)"
+    scientific = scale_mode == SCIENTIFIC_SCALE
     yaxis = {
         "title": {
             "text": (
-                "Log10(EMERREL + 0,01)"
+                "Log10(Intensidad relativa de emergencia (%) + 1)"
                 if scientific
                 else "Intensidad relativa de emergencia (%)"
             ),
@@ -409,7 +423,7 @@ def emergence_figure(
         "Académico": "Dinámica temporal de emergencia simulada",
     }[style]
     scale_label = (
-        "Escala científica log10"
+        "Log10(Intensidad relativa de emergencia (%) + 1)"
         if scientific
         else "Intensidad relativa de emergencia 0–100 %"
     )
@@ -452,7 +466,7 @@ def emergence_figure(
             "font": {"size": 12, "color": "#0f172a"},
         },
         height=570 if style == "Minimalista" else 630,
-        margin={"l": 82, "r": 28, "t": 126, "b": 78},
+        margin={"l": 98 if scientific else 82, "r": 28, "t": 126, "b": 78},
         showlegend=style != "Minimalista",
         legend={
             "orientation": "h",
