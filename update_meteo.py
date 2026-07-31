@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+from io import StringIO
 from pathlib import Path
 from zoneinfo import ZoneInfo
 import json
@@ -19,7 +20,27 @@ START_DATE = date(2026, 1, 1)
 FORECAST_DAYS = 8
 FORECAST_PAST_DAYS = 2
 TIMEOUT = 90
-COLUMNS = ["Fecha", "TMAX", "TMIN", "Prec", "Fuente", "TipoDato", "Emision"]
+COLUMNS = [
+    "Fecha",
+    "TMAX",
+    "TMIN",
+    "Prec",
+    "Fuente",
+    "TipoDato",
+    "CalidadDato",
+    "Emision",
+]
+
+
+def request_headers() -> dict[str, str]:
+    """Permite leer repositorios privados mediante un token opcional."""
+    token = os.environ.get("PREDWEEM_REPOS_TOKEN", "").strip()
+    if not token:
+        return {}
+    return {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github.raw+json",
+    }
 
 
 def get_json(url: str, params: dict) -> dict:
@@ -40,10 +61,33 @@ def get_json(url: str, params: dict) -> dict:
     raise RuntimeError(f"No fue posible consultar {url}") from last_error
 
 
+def get_text(url: str) -> str:
+    last_error: Exception | None = None
+    headers = request_headers()
+    for attempt in range(1, 4):
+        try:
+            response = requests.get(
+                url,
+                headers=headers,
+                timeout=TIMEOUT,
+            )
+            print("URL histórico SIGA:", response.url)
+            response.raise_for_status()
+            if not response.text.strip():
+                raise RuntimeError("La respuesta CSV está vacía.")
+            return response.text
+        except (requests.RequestException, RuntimeError) as exc:
+            last_error = exc
+            if attempt < 3:
+                time.sleep(3 * attempt)
+    raise RuntimeError(f"No fue posible descargar el histórico SIGA desde {url}") from last_error
+
+
 def daily_frame(
     payload: dict,
     source: str,
     data_type: str,
+    quality: str,
     emission: str,
 ) -> pd.DataFrame:
     daily = payload.get("daily") or {}
@@ -73,6 +117,7 @@ def daily_frame(
     )
     frame["Fuente"] = source
     frame["TipoDato"] = data_type
+    frame["CalidadDato"] = quality
     frame["Emision"] = emission
     if frame[["Fecha", "TMAX", "TMIN", "Prec"]].isna().any().any():
         raise RuntimeError(f"{source} devolvió valores críticos nulos.")
@@ -80,14 +125,20 @@ def daily_frame(
 
 
 def validate(frame: pd.DataFrame) -> pd.DataFrame:
+    data = frame.copy()
+    for column in COLUMNS:
+        if column not in data.columns:
+            data[column] = ""
     data = (
-        frame.copy()
+        data[COLUMNS]
         .sort_values("Fecha")
         .drop_duplicates("Fecha", keep="last")
         .reset_index(drop=True)
     )
     if data.empty:
         raise RuntimeError("La serie meteorológica quedó vacía.")
+    if data[["Fecha", "TMAX", "TMIN", "Prec"]].isna().any().any():
+        raise RuntimeError("La serie contiene fechas o variables críticas nulas.")
     if (data["TMAX"] < data["TMIN"]).any():
         raise RuntimeError("TMAX menor que TMIN.")
     if (data["Prec"] < 0).any():
@@ -102,18 +153,184 @@ def validate(frame: pd.DataFrame) -> pd.DataFrame:
     return data
 
 
+def canonicalize_repository_history(
+    raw: pd.DataFrame,
+    *,
+    site: LoliumSite,
+    emission: str,
+    end_date: date,
+) -> pd.DataFrame:
+    """Normaliza la serie consolidada del repositorio geográfico."""
+    data = raw.copy()
+    normalized_names = {str(column).upper().strip(): column for column in data.columns}
+    aliases = {
+        "FECHA": "Fecha",
+        "TMAX": "TMAX",
+        "TMIN": "TMIN",
+        "PREC": "Prec",
+        "FUENTE": "Fuente",
+        "TIPODATO": "TipoDato",
+        "CALIDADDATO": "CalidadDato",
+        "EMISION": "Emision",
+        "EMISION_UTC": "Emision",
+    }
+    rename = {
+        original: aliases[normalized]
+        for normalized, original in normalized_names.items()
+        if normalized in aliases
+    }
+    data = data.rename(columns=rename)
+
+    required = ["Fecha", "TMAX", "TMIN", "Prec", "Fuente"]
+    missing = [column for column in required if column not in data.columns]
+    if missing:
+        raise RuntimeError(
+            f"{site.nombre}: el histórico de {site.repositorio} no contiene "
+            + ", ".join(missing)
+        )
+
+    data["Fecha"] = pd.to_datetime(data["Fecha"], errors="coerce").dt.normalize()
+    for column in ("TMAX", "TMIN", "Prec"):
+        data[column] = pd.to_numeric(data[column], errors="coerce")
+    if "TipoDato" not in data.columns:
+        data["TipoDato"] = "Historico_repositorio"
+    if "CalidadDato" not in data.columns:
+        data["CalidadDato"] = "Sin_clasificacion_origen"
+    if "Emision" not in data.columns:
+        data["Emision"] = emission
+    data["Emision"] = data["Emision"].fillna(emission).astype(str)
+
+    start_timestamp = pd.Timestamp(START_DATE)
+    end_timestamp = pd.Timestamp(end_date)
+    data = data.loc[
+        data["Fecha"].between(start_timestamp, end_timestamp, inclusive="both")
+    ].copy()
+    if data.empty:
+        raise RuntimeError(
+            f"{site.nombre}: el repositorio no aportó histórico hasta "
+            f"{end_date.isoformat()}."
+        )
+    if data[["Fecha", "TMAX", "TMIN", "Prec"]].isna().any().any():
+        raise RuntimeError(
+            f"{site.nombre}: el histórico consolidado contiene valores críticos nulos."
+        )
+    if not data["Fuente"].astype(str).str.contains("SIGA", case=False).any():
+        raise RuntimeError(
+            f"{site.nombre}: no se encontró ninguna observación SIGA en "
+            f"{site.repositorio}/meteo_daily.csv."
+        )
+    return data[COLUMNS]
+
+
+def merge_siga_priority_history(
+    model_history: pd.DataFrame,
+    repository_history: pd.DataFrame,
+) -> pd.DataFrame:
+    """Completa huecos con modelo, pero da prioridad a toda fila del repositorio SIGA."""
+    fallback = model_history.copy()
+    fallback["Fuente"] = "OPEN_METEO_ECMWF_IFS_ARCHIVE_FALLBACK"
+    fallback["TipoDato"] = "Provisional"
+    fallback["CalidadDato"] = "Provisional_hueco_SIGA"
+
+    # El bloque del repositorio se concatena al final y gana en fechas duplicadas.
+    combined = pd.concat([fallback, repository_history], ignore_index=True)
+    return validate(combined)
+
+
+def fetch_open_meteo_history(
+    site: LoliumSite,
+    *,
+    emission: str,
+    end_date: date,
+) -> pd.DataFrame:
+    if end_date < START_DATE:
+        return pd.DataFrame(columns=COLUMNS)
+    payload = get_json(
+        "https://archive-api.open-meteo.com/v1/archive",
+        {
+            "latitude": site.latitud,
+            "longitude": site.longitud,
+            "start_date": START_DATE.isoformat(),
+            "end_date": end_date.isoformat(),
+            "daily": (
+                "temperature_2m_max,temperature_2m_min,precipitation_sum"
+            ),
+            "models": "ecmwf_ifs",
+            "timezone": site.timezone,
+            "temperature_unit": "celsius",
+            "precipitation_unit": "mm",
+            "cell_selection": "land",
+        },
+    )
+    return daily_frame(
+        payload,
+        "OPEN_METEO_ECMWF_IFS_ARCHIVE",
+        "Historico_modelo",
+        "Historico_modelo_grilla",
+        emission,
+    )
+
+
+def fetch_repository_siga_history(
+    site: LoliumSite,
+    *,
+    emission: str,
+    end_date: date,
+) -> pd.DataFrame:
+    text = get_text(site.raw_meteo_url)
+    try:
+        raw = pd.read_csv(StringIO(text))
+    except Exception as exc:
+        raise RuntimeError(
+            f"{site.nombre}: no fue posible interpretar el CSV histórico SIGA."
+        ) from exc
+    return canonicalize_repository_history(
+        raw,
+        site=site,
+        emission=emission,
+        end_date=end_date,
+    )
+
+
+def build_historical_block(
+    site: LoliumSite,
+    *,
+    emission: str,
+    end_date: date,
+) -> pd.DataFrame:
+    model_history = fetch_open_meteo_history(
+        site,
+        emission=emission,
+        end_date=end_date,
+    )
+    if not site.usa_siga_historico:
+        return validate(model_history)
+
+    repository_history = fetch_repository_siga_history(
+        site,
+        emission=emission,
+        end_date=end_date,
+    )
+    merged = merge_siga_priority_history(model_history, repository_history)
+    siga_rows = int(
+        merged["Fuente"].astype(str).str.contains("SIGA", case=False).sum()
+    )
+    provisional_rows = int(
+        (~merged["Fuente"].astype(str).str.contains("SIGA", case=False)).sum()
+    )
+    print(
+        f"{site.nombre}: histórico SIGA prioritario = {siga_rows} filas; "
+        f"respaldo provisional = {provisional_rows} filas."
+    )
+    return merged
+
+
 def combine_historical_and_forecast(
     historical: pd.DataFrame,
     forecast_with_recent_days: pd.DataFrame,
     today: date,
 ) -> pd.DataFrame:
-    """Une bloques sin permitir un hueco entre ayer y el pronóstico.
-
-    La Forecast API se consulta con ``past_days`` para que el día local actual
-    quede incluido aun cuando la ventana predeterminada del modelo comience al
-    día siguiente. El histórico se conserva solo hasta ayer y el bloque de
-    pronóstico se utiliza desde hoy.
-    """
+    """Une bloques sin permitir un hueco entre ayer y el pronóstico."""
     historical_block = historical.copy()
     forecast_block = forecast_with_recent_days.copy()
 
@@ -181,29 +398,10 @@ def fetch_site_weather(site: LoliumSite) -> tuple[pd.DataFrame, str]:
 
     historical = pd.DataFrame(columns=COLUMNS)
     if yesterday >= START_DATE:
-        payload = get_json(
-            "https://archive-api.open-meteo.com/v1/archive",
-            {
-                "latitude": site.latitud,
-                "longitude": site.longitud,
-                "start_date": START_DATE.isoformat(),
-                "end_date": yesterday.isoformat(),
-                "daily": (
-                    "temperature_2m_max,temperature_2m_min,"
-                    "precipitation_sum"
-                ),
-                "models": "ecmwf_ifs",
-                "timezone": site.timezone,
-                "temperature_unit": "celsius",
-                "precipitation_unit": "mm",
-                "cell_selection": "land",
-            },
-        )
-        historical = daily_frame(
-            payload,
-            "OPEN_METEO_ECMWF_IFS_ARCHIVE",
-            "Historico_modelo",
-            emission,
+        historical = build_historical_block(
+            site,
+            emission=emission,
+            end_date=yesterday,
         )
 
     forecast_payload = get_json(
@@ -227,6 +425,7 @@ def fetch_site_weather(site: LoliumSite) -> tuple[pd.DataFrame, str]:
         forecast_payload,
         "OPEN_METEO_ECMWF_IFS_FORECAST",
         "Pronostico",
+        "Pronostico_operativo",
         emission,
     )
     combined = combine_historical_and_forecast(historical, forecast, today)
@@ -234,14 +433,15 @@ def fetch_site_weather(site: LoliumSite) -> tuple[pd.DataFrame, str]:
 
 
 def source_summary(frame: pd.DataFrame) -> list[dict]:
-    grouped = frame.groupby(["Fuente", "TipoDato"]).size()
+    grouped = frame.groupby(["Fuente", "TipoDato", "CalidadDato"]).size()
     return [
         {
             "fuente": source,
             "tipo": data_type,
+            "calidad": quality,
             "filas": int(count),
         }
-        for (source, data_type), count in grouped.items()
+        for (source, data_type, quality), count in grouped.items()
     ]
 
 
@@ -261,6 +461,7 @@ def main() -> None:
         atomic_csv(frame, output)
         if slug == DEFAULT_SITE_SLUG:
             atomic_csv(frame, LEGACY_OUTPUT)
+        siga_mask = frame["Fuente"].astype(str).str.contains("SIGA", case=False)
         state_sites[slug] = {
             "sitio": site.etiqueta,
             "repositorio": site.repositorio,
@@ -272,6 +473,13 @@ def main() -> None:
             "inicio": frame["Fecha"].min().date().isoformat(),
             "fin": frame["Fecha"].max().date().isoformat(),
             "filas": int(len(frame)),
+            "historico_prioritario": (
+                "SIGA" if site.usa_siga_historico else "Open-Meteo ECMWF IFS"
+            ),
+            "repositorio_historico_siga": (
+                site.repositorio if site.usa_siga_historico else None
+            ),
+            "filas_siga": int(siga_mask.sum()),
             "fuentes": source_summary(frame),
         }
 
