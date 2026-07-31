@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 from dataclasses import replace
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -185,8 +186,9 @@ def run() -> None:
             horizontal=True,
             key=f"scale_mode_{site.slug}",
             help=(
-                "La escala operativa expresa la emergencia de 0 a 100 %. "
-                "La científica conserva Log10(EMERREL + 0,01)."
+                "La escala operativa expresa la intensidad relativa de 0 a 100 %. "
+                "La alternativa logarítmica usa "
+                "Log10(Intensidad relativa de emergencia (%) + 1)."
             ),
         )
     with campaign_column:
@@ -249,6 +251,8 @@ def run() -> None:
 
     data["Fecha"] = pd.to_datetime(data["Fecha"])
     data["EMERREL_PCT"] = data["EMERREL"].clip(lower=0.0) * 100.0
+    data = data.drop(columns=["EMERREL_LOG"], errors="ignore")
+    data["LOG10_INTENSIDAD_PCT_MAS_1"] = np.log10(data["EMERREL_PCT"] + 1.0)
     data["Sitio"] = site.nombre
     data["Latitud"] = site.latitud
     data["Longitud"] = site.longitud
@@ -389,6 +393,9 @@ def run() -> None:
                         "Cobertura_rastrojo_pct": coverage,
                         "Estilo_grafico": style,
                         "Escala_grafica": scale_mode,
+                        "Transformacion_logaritmica": (
+                            "log10(Intensidad relativa de emergencia (%) + 1)"
+                        ),
                         "Vista_temporal": (
                             "Campaña completa"
                             if show_full_campaign
