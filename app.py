@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import math
 from dataclasses import replace
 from pathlib import Path
 
@@ -170,6 +171,125 @@ def build_operational_data(
     return out, model_name, peak
 
 
+def phenology_clock_state(
+    data: pd.DataFrame,
+    *,
+    operational_peak: pd.Timestamp | None,
+    today: pd.Timestamp,
+    control_cd: float,
+    limit_cd: float,
+) -> dict[str, object]:
+    ordered = data.sort_values("Fecha").reset_index(drop=True)
+    available = ordered[ordered["Fecha"] <= today]
+    current_row = available.iloc[-1] if not available.empty else ordered.iloc[0]
+    current_date = pd.Timestamp(current_row["Fecha"]).normalize()
+    raw_tt = current_row.get("TT_DESDE_PICO")
+    tt_current = float(raw_tt) if pd.notna(raw_tt) else 0.0
+    tt_current = max(tt_current, 0.0)
+
+    if operational_peak is None:
+        stage = "Esperando el primer pico de emergencia"
+        remaining_label = "Reloj aún no iniciado"
+        remaining_cd = float(control_cd)
+    elif current_date < pd.Timestamp(operational_peak).normalize() or pd.isna(raw_tt):
+        stage = "Reloj aún no iniciado"
+        remaining_label = "Faltan para 600 °Cd"
+        remaining_cd = float(control_cd)
+    elif tt_current < float(control_cd):
+        stage = "Acumulación térmica previa al control"
+        remaining_label = "Faltan para 600 °Cd"
+        remaining_cd = float(control_cd) - tt_current
+    elif tt_current < float(limit_cd):
+        stage = "Ventana fenológica de máxima susceptibilidad"
+        remaining_label = "Faltan para 800 °Cd"
+        remaining_cd = float(limit_cd) - tt_current
+    else:
+        stage = "Ventana fenológica de 600–800 °Cd superada"
+        remaining_label = "Exceso sobre 800 °Cd"
+        remaining_cd = tt_current - float(limit_cd)
+
+    return {
+        "fecha": current_date,
+        "tt_actual": tt_current,
+        "estado": stage,
+        "etiqueta_restante": remaining_label,
+        "grados_restantes": max(remaining_cd, 0.0),
+    }
+
+
+def build_phenology_clock_figure(
+    tt_current: float,
+    *,
+    control_cd: float,
+    limit_cd: float,
+    stage: str,
+) -> go.Figure:
+    gauge_max = max(
+        float(limit_cd),
+        math.ceil(max(float(tt_current), float(limit_cd)) / 100.0) * 100.0,
+    )
+    tickvals = [0.0, float(control_cd), float(limit_cd)]
+    ticktext = ["0", f"{control_cd:.0f}", f"{limit_cd:.0f}"]
+    steps = [
+        {"range": [0.0, float(control_cd)], "color": "#dbeafe"},
+        {"range": [float(control_cd), float(limit_cd)], "color": "#dcfce7"},
+    ]
+    if gauge_max > float(limit_cd):
+        tickvals.append(gauge_max)
+        ticktext.append(f"{gauge_max:.0f}")
+        steps.append(
+            {"range": [float(limit_cd), gauge_max], "color": "#fee2e2"}
+        )
+
+    if tt_current < float(control_cd):
+        bar_color = "#2563eb"
+    elif tt_current < float(limit_cd):
+        bar_color = "#16a34a"
+    else:
+        bar_color = "#b91c1c"
+
+    figure = go.Figure(
+        go.Indicator(
+            mode="gauge+number",
+            value=float(tt_current),
+            number={"suffix": " °Cd", "font": {"size": 42}},
+            title={
+                "text": "Reloj fenológico<br><span style='font-size:0.75em'>"
+                "grados-día desde el primer pico</span>"
+            },
+            gauge={
+                "axis": {
+                    "range": [0.0, gauge_max],
+                    "tickvals": tickvals,
+                    "ticktext": ticktext,
+                },
+                "bar": {"color": bar_color, "thickness": 0.34},
+                "steps": steps,
+                "threshold": {
+                    "line": {"color": "#b45309", "width": 4},
+                    "thickness": 0.8,
+                    "value": float(control_cd),
+                },
+            },
+        )
+    )
+    figure.add_annotation(
+        x=0.5,
+        y=0.02,
+        xref="paper",
+        yref="paper",
+        text=stage,
+        showarrow=False,
+        font={"size": 15},
+    )
+    figure.update_layout(
+        height=330,
+        margin={"l": 30, "r": 30, "t": 65, "b": 35},
+        paper_bgcolor="rgba(0,0,0,0)",
+    )
+    return figure
+
+
 def add_grouped_pulses(
     figure: go.Figure,
     data: pd.DataFrame,
@@ -239,7 +359,6 @@ with st.sidebar:
         f"Repositorio de referencia: [`{site.repositorio}`]"
         f"({site.repository_url})"
     )
-
     st.success(f"Modelo automático: **{site.modelo_operativo_etiqueta}**")
 
     uploaded_weather = st.file_uploader(
@@ -254,26 +373,14 @@ with st.sidebar:
         CONFIG.cobertura_predeterminada_pct,
         5,
         key=f"coverage_{site.slug}",
-    )
-    wmax = st.number_input(
-        "Wmax superficial (mm)",
-        5.0,
-        60.0,
-        CONFIG.wmax_predeterminado_mm,
-        0.5,
-        key=f"wmax_{site.slug}",
-    )
-    kr_exponent = st.slider(
-        "Exponente Kr",
-        0.0,
-        2.0,
-        CONFIG.exponente_kr_predeterminado,
-        0.1,
-        key=f"kr_{site.slug}",
+        help=(
+            "Única variable de ajuste visible. Modifica el coeficiente de "
+            "evaporación del suelo y el modulador térmico superficial."
+        ),
     )
     st.caption(
-        "La localidad determina automáticamente el modelo operativo. "
-        "No se utilizan recuentos ni validaciones de campo para seleccionarlo."
+        "La cobertura es la única variable de ajuste. Los demás parámetros "
+        "permanecen fijados por la calibración específica de cada localidad."
     )
 
 site_config = replace(
@@ -283,6 +390,8 @@ site_config = replace(
     longitud=site.longitud,
     timezone=site.timezone,
 )
+fixed_wmax = float(site_config.wmax_predeterminado_mm)
+fixed_kr_exponent = float(site_config.exponente_kr_predeterminado)
 meteo_path = site.meteo_path(BASE)
 
 st.title(f"🌾 PREDWEEM {site.nombre} — {site.modelo_operativo_etiqueta}")
@@ -308,9 +417,9 @@ try:
         weather,
         ann,
         coverage_percent=coverage,
-        wmax=float(wmax),
+        wmax=fixed_wmax,
         lag_days=int(site.lag_operativo_dias),
-        kr_exponent=float(kr_exponent),
+        kr_exponent=fixed_kr_exponent,
         config=site_config,
     )
     plot_data, model_name, operational_peak = build_operational_data(
@@ -334,32 +443,77 @@ control_date, limit_date = phenology_window_dates(
     site_config.tt_limite_cd,
 )
 
+today_local = (
+    pd.Timestamp.now(tz=site.timezone)
+    .tz_localize(None)
+    .normalize()
+)
+clock_state = phenology_clock_state(
+    plot_data,
+    operational_peak=operational_peak,
+    today=today_local,
+    control_cd=site_config.tt_control_cd,
+    limit_cd=site_config.tt_limite_cd,
+)
+
 st.markdown(
     "<div style='padding:16px;border-radius:12px;border:2px solid #15803d;"
     "background:#f0fdf4'>"
     f"<b>Sitio:</b> {site.etiqueta}<br>"
     f"<b>Modelo operativo automático:</b> {model_name}<br>"
-    f"<b>Lag aplicado:</b> "
-    f"{site.lag_operativo_dias if site.modelo_operativo == 'con_lag' else 0} días<br>"
+    f"<b>Cobertura de rastrojo ajustada:</b> {coverage}%<br>"
     "<b>Selección:</b> regla fija por localidad; sin recuentos de campo."
     "</div>",
     unsafe_allow_html=True,
 )
 
-metrics = st.columns(5)
-metrics[0].metric("Modelo operativo", model_name)
-metrics[1].metric(
+summary_metrics = st.columns(3)
+summary_metrics[0].metric("Cobertura de rastrojo", f"{coverage}%")
+summary_metrics[1].metric(
     "Primer pico",
     operational_peak.strftime("%d/%m/%Y") if operational_peak is not None else "—",
 )
-metrics[2].metric(
-    "Lag operativo",
-    f"{site.lag_operativo_dias} días"
-    if site.modelo_operativo == "con_lag"
-    else "0 días",
+summary_metrics[2].metric(
+    "Fecha térmica vigente",
+    pd.Timestamp(clock_state["fecha"]).strftime("%d/%m/%Y"),
 )
-metrics[3].metric("Ke", f"{result.ke:.3f}")
-metrics[4].metric("Wmax", f"{wmax:.1f} mm")
+
+st.subheader("⏱️ Reloj de grados-día fenológico")
+clock_column, clock_details = st.columns([1.45, 1.0])
+
+with clock_column:
+    clock_figure = build_phenology_clock_figure(
+        float(clock_state["tt_actual"]),
+        control_cd=site_config.tt_control_cd,
+        limit_cd=site_config.tt_limite_cd,
+        stage=str(clock_state["estado"]),
+    )
+    st.plotly_chart(clock_figure, width="stretch")
+
+with clock_details:
+    st.metric(
+        "Tiempo térmico desde el pico",
+        f"{float(clock_state['tt_actual']):.1f} °Cd",
+    )
+    st.metric(
+        str(clock_state["etiqueta_restante"]),
+        f"{float(clock_state['grados_restantes']):.1f} °Cd",
+    )
+    date_columns = st.columns(2)
+    date_columns[0].metric(
+        "Fecha 600 °Cd",
+        control_date.strftime("%d/%m/%Y") if control_date is not None else "—",
+    )
+    date_columns[1].metric(
+        "Fecha 800 °Cd",
+        limit_date.strftime("%d/%m/%Y") if limit_date is not None else "—",
+    )
+    progress = min(
+        float(clock_state["tt_actual"]) / float(site_config.tt_limite_cd),
+        1.0,
+    )
+    st.progress(progress)
+    st.info(str(clock_state["estado"]))
 
 fig = go.Figure()
 smooth_export = add_grouped_pulses(fig, plot_data, model_name=model_name)
@@ -428,6 +582,7 @@ with st.expander("Resultados diarios del modelo operativo"):
                         if site.modelo_operativo == "con_lag"
                         else 0
                     ),
+                    "Cobertura_rastrojo_pct": coverage,
                     "Seleccion_automatica": True,
                     "Usa_recuento_campo": False,
                 }
@@ -438,11 +593,16 @@ with st.expander("Resultados diarios del modelo operativo"):
             [
                 {
                     "Modelo": model_name,
+                    "Fecha_primer_pico": operational_peak,
+                    "Fecha_reloj": clock_state["fecha"],
+                    "TT_actual_desde_pico_Cd": clock_state["tt_actual"],
+                    "Estado_fenologico": clock_state["estado"],
                     "Fecha_600_Cd": control_date,
                     "Fecha_800_Cd": limit_date,
+                    "Cobertura_rastrojo_pct": coverage,
                 }
             ]
-        ).to_excel(writer, sheet_name="Ventana_Fenologica", index=False)
+        ).to_excel(writer, sheet_name="Reloj_Fenologico", index=False)
         smooth_export.to_excel(writer, sheet_name="Pulsos_Agrupados", index=False)
 
     st.download_button(
