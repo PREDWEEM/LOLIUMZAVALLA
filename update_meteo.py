@@ -18,50 +18,26 @@ LEGACY_OUTPUT = Path("meteo_daily.csv")
 STATE = Path("data/estado_actualizacion_meteo.json")
 TIMEOUT = 90
 MAX_ATTEMPTS = 3
-GITHUB_API_VERSION = "2022-11-28"
-
-
-def repository_token() -> str:
-    """Devuelve el token necesario para leer los repositorios privados."""
-    token = os.environ.get("PREDWEEM_REPOS_TOKEN", "").strip()
-    if not token:
-        raise RuntimeError(
-            "El secreto PREDWEEM_REPOS_TOKEN no está definido. "
-            "Debe tener permiso Contents: Read para todos los repositorios."
-        )
-    return token
-
-
-def github_headers() -> dict[str, str]:
-    return {
-        "Authorization": f"Bearer {repository_token()}",
-        "Accept": "application/vnd.github.raw+json",
-        "X-GitHub-Api-Version": GITHUB_API_VERSION,
-    }
-
-
-def repository_api_url(site: LoliumSite) -> str:
-    return (
-        f"https://api.github.com/repos/{site.repositorio}/contents/"
-        f"{site.archivo_meteo}"
-    )
+PUBLIC_HEADERS = {
+    "User-Agent": "PREDWEEM-LOLIUM-multisitio/1.0",
+    "Accept": "text/csv,*/*",
+}
 
 
 def download_exact_repository_file(site: LoliumSite) -> tuple[bytes, str]:
     """
-    Descarga los bytes originales de meteo_daily.csv mediante la API de GitHub.
+    Descarga los bytes originales del meteo_daily.csv público.
 
     No interpreta, completa, ordena, combina ni vuelve a serializar el CSV.
     """
-    url = repository_api_url(site)
+    url = site.raw_meteo_url
     last_error: Exception | None = None
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             response = requests.get(
                 url,
-                headers=github_headers(),
-                params={"ref": site.rama_meteo},
+                headers=PUBLIC_HEADERS,
                 timeout=TIMEOUT,
             )
             print(
@@ -72,9 +48,9 @@ def download_exact_repository_file(site: LoliumSite) -> tuple[bytes, str]:
 
             if response.status_code == 404:
                 raise RuntimeError(
-                    f"{site.nombre}: GitHub devolvió 404. El archivo puede "
-                    "existir, pero PREDWEEM_REPOS_TOKEN no tiene acceso al "
-                    f"repositorio privado {site.repositorio}."
+                    f"{site.nombre}: GitHub devolvió 404 para {url}. "
+                    "Verifique el nombre del repositorio, la rama y la "
+                    "ubicación de meteo_daily.csv."
                 )
 
             response.raise_for_status()
@@ -138,10 +114,10 @@ def main() -> None:
 
     state: dict[str, object] = {
         "actualizado_en": updated_at,
-        "modo": "COPIA_EXACTA_METEO_DAILY",
+        "modo": "COPIA_EXACTA_METEO_DAILY_PUBLICO",
         "descripcion": (
             "Cada archivo de data/meteo_sitios es una copia byte por byte "
-            "del meteo_daily.csv de su repositorio geográfico."
+            "del meteo_daily.csv público de su repositorio geográfico."
         ),
         "sitios": {},
     }
@@ -157,12 +133,13 @@ def main() -> None:
             "repositorio": site.repositorio,
             "rama": site.rama_meteo,
             "archivo_origen": site.archivo_meteo,
-            "url_api": repository_api_url(site),
+            "url_origen": site.raw_meteo_url,
             "url_solicitada": requested_url,
             "archivo_destino": destination.as_posix(),
             "bytes": len(content),
             "sha256": digest,
             "copia_exacta": True,
+            "repositorio_publico": True,
         }
         state["sitios"][site.slug] = site_state
 
@@ -185,8 +162,8 @@ def main() -> None:
     )
 
     print(
-        "\nActualización terminada: todos los archivos fueron copiados "
-        "sin transformar sus datos ni su estructura."
+        "\nActualización terminada: todos los archivos públicos fueron "
+        "copiados sin transformar sus datos ni su estructura."
     )
 
 
