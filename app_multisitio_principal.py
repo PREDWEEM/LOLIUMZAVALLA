@@ -68,6 +68,21 @@ def run() -> None:
             padding: .4rem;
             box-shadow: 0 6px 20px rgba(15,23,42,.065);
         }
+        .site-panel {
+            padding: 15px 18px;
+            border-radius: 14px;
+            border: 1px solid #bbf7d0;
+            background: linear-gradient(90deg,#f0fdf4,#ffffff);
+            box-shadow: 0 4px 14px rgba(15,23,42,.05);
+            min-height: 116px;
+        }
+        .upload-panel {
+            padding: 12px 15px;
+            border-radius: 12px;
+            border: 1px solid #cbd5e1;
+            background: #f8fafc;
+            color: #475569;
+        }
         .coverage-panel {
             padding: 15px 18px;
             border-radius: 14px;
@@ -93,16 +108,65 @@ def run() -> None:
     sites = ordered_sites()
     slugs = [site.slug for site in sites]
 
-    with st.sidebar:
-        st.header("Configuración geográfica")
+    st.title("🌾 PREDWEEM LOLIUM — Plataforma multisitio")
+    st.caption(
+        "Predicción operativa de emergencia de Lolium con selección automática "
+        "del modelo según la localidad."
+    )
+
+    st.subheader("📍 Sitio y datos meteorológicos")
+    site_column, upload_column = st.columns([1.25, 1.75])
+
+    with site_column:
         slug = st.selectbox(
-            "Sitio específico",
+            "Seleccionar sitio",
             slugs,
             index=slugs.index(DEFAULT_SITE_SLUG),
             format_func=lambda value: SITES[value].etiqueta,
             key="selected_lolium_site",
+            help="Define la localidad, las coordenadas y el modelo operativo.",
         )
         site = get_site(slug)
+        st.markdown(
+            f"""
+            <div class="site-panel">
+                <b style="color:#166534;font-size:1.05rem;">{site.etiqueta}</b><br>
+                <span style="color:#475569;">
+                    Latitud {site.latitud:.5f} · Longitud {site.longitud:.5f}
+                </span><br>
+                <span style="color:#166534;">
+                    Modelo automático: <b>{site.modelo_operativo_etiqueta}</b>
+                </span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with upload_column:
+        uploaded = st.file_uploader(
+            f"Cargar meteorología diaria de {site.nombre}",
+            type=["csv", "xlsx", "xls"],
+            key=f"weather_upload_{site.slug}",
+            help=(
+                "Archivo diario con las columnas Fecha, TMAX, TMIN y Prec. "
+                "Cuando no se carga un archivo, se usa la serie del repositorio."
+            ),
+        )
+        if uploaded is not None:
+            st.success(f"Archivo cargado: **{uploaded.name}**")
+        else:
+            st.markdown(
+                """
+                <div class="upload-panel">
+                    Sin archivo manual: PREDWEEM utilizará automáticamente la
+                    serie meteorológica disponible en el repositorio del sitio.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    with st.sidebar:
+        st.header("Información y visualización")
         st.write(f"**{site.etiqueta}**")
         st.caption(f"Lat {site.latitud:.5f} · Lon {site.longitud:.5f}")
         st.markdown(
@@ -110,11 +174,6 @@ def run() -> None:
             f"({site.repository_url})"
         )
         st.success(f"Modelo automático: **{site.modelo_operativo_etiqueta}**")
-        uploaded = st.file_uploader(
-            f"Meteorología diaria de {site.nombre}",
-            type=["csv", "xlsx", "xls"],
-            key=f"weather_upload_{site.slug}",
-        )
         style = st.selectbox(
             "Estilo de visualización",
             CHART_STYLES,
@@ -126,8 +185,8 @@ def run() -> None:
             ),
         )
         st.caption(
-            "La cobertura, la escala y la vista temporal se ajustan en la "
-            "página principal."
+            "El sitio, la meteorología, la cobertura, la escala y la vista "
+            "temporal se ajustan en la página principal."
         )
 
     config = replace(
@@ -136,12 +195,6 @@ def run() -> None:
         latitud=site.latitud,
         longitud=site.longitud,
         timezone=site.timezone,
-    )
-
-    st.title(f"🌾 PREDWEEM {site.nombre} — {site.modelo_operativo_etiqueta}")
-    st.caption(
-        "Predicción operativa de emergencia de Lolium con selección automática "
-        "del modelo según la localidad."
     )
 
     st.subheader("🌱 Ajuste de cobertura superficial")
