@@ -15,7 +15,6 @@ from app_multisitio import (
     build_operational_data,
     clock_figure,
     clock_state,
-    emergence_figure,
     format_window,
     get_ann,
     get_site,
@@ -24,6 +23,14 @@ from app_multisitio import (
     resolve_weather,
     simulate_dual,
     smooth_pulses,
+)
+
+from visualizacion_operativa import (
+    SCALE_MODES,
+    compact_date,
+    emergence_figure,
+    operational_status,
+    thermal_figure,
 )
 
 
@@ -37,27 +44,28 @@ def run() -> None:
         """
         <style>
         .block-container {
-            padding-top: 1.25rem;
+            padding-top: 1.15rem;
             padding-bottom: 2.25rem;
-            max-width: 1520px;
+            max-width: 1540px;
         }
         [data-testid='stSidebar'] {
             background: linear-gradient(180deg,#f0fdf4 0%,#ecfdf5 52%,#f8fafc 100%);
             border-right: 1px solid #d1fae5;
         }
         [data-testid='stMetric'] {
-            background: #fff;
+            background: #ffffff;
             border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: .75rem .9rem;
-            box-shadow: 0 3px 12px rgba(15,23,42,.055);
+            border-radius: 13px;
+            padding: .82rem .95rem;
+            box-shadow: 0 4px 14px rgba(15,23,42,.055);
+            min-height: 112px;
         }
         div[data-testid='stPlotlyChart'] {
-            background: #fff;
+            background: #ffffff;
             border: 1px solid #e2e8f0;
-            border-radius: 14px;
-            padding: .35rem;
-            box-shadow: 0 5px 18px rgba(15,23,42,.065);
+            border-radius: 15px;
+            padding: .4rem;
+            box-shadow: 0 6px 20px rgba(15,23,42,.065);
         }
         .coverage-panel {
             padding: 15px 18px;
@@ -66,6 +74,13 @@ def run() -> None:
             background: linear-gradient(90deg,#eff6ff,#ffffff);
             box-shadow: 0 4px 14px rgba(15,23,42,.05);
             min-height: 112px;
+        }
+        .operation-panel {
+            padding: 13px 17px;
+            border-radius: 14px;
+            border: 1px solid #fde68a;
+            background: linear-gradient(90deg,#fffbeb,#ffffff);
+            box-shadow: 0 4px 14px rgba(15,23,42,.045);
         }
         h1,h2,h3 {letter-spacing: -.02em;}
         #MainMenu,footer {visibility: hidden;}
@@ -110,8 +125,8 @@ def run() -> None:
             ),
         )
         st.caption(
-            "La cobertura de rastrojo se ajusta en la página principal. "
-            "El estilo solo modifica la presentación."
+            "La cobertura, la escala y la vista temporal se ajustan en la "
+            "página principal."
         )
 
     config = replace(
@@ -160,6 +175,49 @@ def run() -> None:
             unsafe_allow_html=True,
         )
 
+    st.subheader("📊 Visualización operativa")
+    scale_column, campaign_column, thermal_column = st.columns([1.7, 1.15, 1.15])
+    with scale_column:
+        scale_mode = st.radio(
+            "Escala del eje Y",
+            SCALE_MODES,
+            index=0,
+            horizontal=True,
+            key=f"scale_mode_{site.slug}",
+            help=(
+                "La escala operativa expresa la emergencia de 0 a 100 %. "
+                "La científica conserva Log10(EMERREL + 0,01)."
+            ),
+        )
+    with campaign_column:
+        show_full_campaign = st.toggle(
+            "Mostrar campaña completa",
+            value=False,
+            key=f"full_campaign_{site.slug}",
+            help=(
+                "Desactivado: recorta la vista alrededor del período "
+                "agronómicamente relevante."
+            ),
+        )
+    with thermal_column:
+        show_thermal_panel = st.toggle(
+            "Mostrar panel térmico",
+            value=False,
+            key=f"thermal_panel_{site.slug}",
+            help="Agrega el tiempo térmico acumulado con límites en 600 y 800 °Cd.",
+        )
+
+    st.markdown(
+        """
+        <div class="operation-panel">
+            <b style="color:#92400e;">Lectura predeterminada:</b>
+            barras azules para la emergencia diaria, línea gris para la tendencia,
+            banda ámbar para la ventana recomendada y marcador negro para hoy.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
     weather, source = resolve_weather(site, uploaded)
     st.caption(f"**Fuente meteorológica activa:** {source}")
     if weather is None or weather.empty:
@@ -190,6 +248,7 @@ def run() -> None:
         st.stop()
 
     data["Fecha"] = pd.to_datetime(data["Fecha"])
+    data["EMERREL_PCT"] = data["EMERREL"].clip(lower=0.0) * 100.0
     data["Sitio"] = site.nombre
     data["Latitud"] = site.latitud
     data["Longitud"] = site.longitud
@@ -200,47 +259,54 @@ def run() -> None:
         config.tt_control_cd,
         config.tt_limite_cd,
     )
-    state = clock_state(
-        data,
-        peak,
-        pd.Timestamp.now(tz=site.timezone).tz_localize(None).normalize(),
+    today_local = pd.Timestamp.now(tz=site.timezone).tz_localize(None).normalize()
+    state = clock_state(data, peak, today_local)
+    current_status = operational_status(today_local, peak, control, limit)
+
+    st.write("")
+    indicators = st.columns(4)
+    indicators[0].metric(
+        "Primer pico válido",
+        compact_date(peak) if peak is not None else "Pendiente",
+        help="Primer día con EMERREL superior al umbral operativo.",
+    )
+    indicators[1].metric(
+        "Inicio de ventana",
+        compact_date(control) if control is not None else "Pendiente",
+        delta="600 °Cd" if control is not None else None,
+        delta_color="off",
+    )
+    indicators[2].metric(
+        "Fin de ventana",
+        compact_date(limit) if limit is not None else "Pendiente",
+        delta="800 °Cd" if limit is not None else None,
+        delta_color="off",
+    )
+    indicators[3].metric(
+        "Estado actual",
+        current_status,
+        delta=today_local.strftime("%d/%m/%Y"),
+        delta_color="off",
     )
 
     st.markdown(
         f"""
-        <div style="padding:16px 18px;border-radius:14px;border:1px solid #bbf7d0;
-        background:linear-gradient(90deg,#f0fdf4,#fff);
-        box-shadow:0 4px 14px rgba(15,23,42,.055)">
-            <b style="color:#166534">Sitio:</b> {site.etiqueta}<br>
-            <b style="color:#166534">Modelo operativo:</b> {model_name}<br>
+        <div style="padding:13px 17px;border-radius:14px;border:1px solid #bbf7d0;
+        background:linear-gradient(90deg,#f0fdf4,#ffffff);">
+            <b style="color:#166534">Sitio:</b> {site.etiqueta} ·
+            <b style="color:#166534">Modelo:</b> {model_name} ·
             <b style="color:#166534">Cobertura:</b> {coverage}% ·
-            <b style="color:#166534">Visualización:</b> {style}<br>
-            <span style="color:#64748b">
-                Selección fija por localidad; sin recuentos de campo.
-            </span>
+            <b style="color:#166534">Escala:</b> {scale_mode}
         </div>
         """,
         unsafe_allow_html=True,
     )
     st.write("")
 
-    metrics = st.columns(3)
-    metrics[0].metric("Cobertura de rastrojo", f"{coverage}%")
-    metrics[1].metric(
-        "Primer pico",
-        peak.strftime("%d/%m/%Y") if peak is not None else "—",
-    )
-    metrics[2].metric(
-        "Ventana fenológica",
-        f"{control.strftime('%d/%m')}–{limit.strftime('%d/%m')}"
-        if control is not None and limit is not None
-        else "Pendiente",
-    )
-
     smooth = smooth_pulses(data)
     smooth["Modelo"] = model_name
     smooth["Sitio"] = site.nombre
-    figure = emergence_figure(
+    figure, x_range = emergence_figure(
         data,
         smooth,
         site.nombre,
@@ -249,6 +315,9 @@ def run() -> None:
         peak,
         control,
         limit,
+        scale_mode,
+        today_local,
+        show_full_campaign,
     )
 
     main_column, gauge_column = st.columns([3.4, 1])
@@ -265,24 +334,35 @@ def run() -> None:
                     "format": "png",
                     "filename": (
                         f"PREDWEEM_{site.slug}_"
-                        f"{style.lower().replace(' ', '_')}"
+                        f"{scale_mode.lower().replace(' ', '_')}"
                     ),
-                    "height": 1100,
-                    "width": 2100,
+                    "height": 1150,
+                    "width": 2200,
                     "scale": 2,
                 },
             },
         )
         st.caption(
-            "La franja amarilla identifica la ventana fenológica de "
-            "600–800 °Cd. El eje Y usa Log10(EMERREL + 0,01); el cursor "
-            "conserva EMERREL original."
+            "Barras azules: emergencia diaria. Línea gris: tendencia de pulsos. "
+            "Banda ámbar: ventana recomendada. Línea negra: fecha actual."
         )
         st.caption(f"Ventana fenológica: {format_window(control, limit)}")
 
     with gauge_column:
         st.plotly_chart(clock_figure(state), width="stretch")
         st.caption(str(state["estado"]))
+
+    if show_thermal_panel:
+        st.plotly_chart(
+            thermal_figure(data, x_range, today_local),
+            width="stretch",
+            config={
+                "displaylogo": False,
+                "responsive": True,
+                "scrollZoom": True,
+                "modeBarButtonsToRemove": ["lasso2d", "select2d"],
+            },
+        )
 
     with st.expander("Resultados diarios del modelo operativo"):
         st.dataframe(data, width="stretch", hide_index=True)
@@ -308,10 +388,17 @@ def run() -> None:
                         ),
                         "Cobertura_rastrojo_pct": coverage,
                         "Estilo_grafico": style,
-                        "Color_ventana_fenologica": "amarillo",
-                        "Transformacion_grafica_Y": (
-                            "log10(EMERREL + 0.01)"
+                        "Escala_grafica": scale_mode,
+                        "Vista_temporal": (
+                            "Campaña completa"
+                            if show_full_campaign
+                            else "Vista operativa recortada"
                         ),
+                        "Panel_termico_visible": show_thermal_panel,
+                        "Serie_diaria": "Barras azules",
+                        "Tendencia": "Línea gris de pulsos agrupados",
+                        "Color_ventana_fenologica": "ámbar",
+                        "Estado_actual": current_status,
                         "Seleccion_automatica": True,
                         "Usa_recuento_campo": False,
                     }
