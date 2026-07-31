@@ -29,7 +29,7 @@ def test_positive_first_inspection_confirms_no_lag_and_hides_lag():
     assert visible_models(decision) == (True, False)
 
 
-def test_first_negative_selects_fixed_lag_and_hides_no_lag():
+def test_first_negative_keeps_both_models_visible_and_requests_second_check():
     peak0 = pd.Timestamp("2026-03-20")
     peak15 = pd.Timestamp("2026-04-04")
     decision = evaluate_selector(
@@ -38,17 +38,58 @@ def test_first_negative_selects_fixed_lag_and_hides_no_lag():
         pd.DataFrame([inspection("2026-03-20")]),
         today=pd.Timestamp("2026-03-20"),
     )
-    assert decision.estado == "CON_LAG_PROVISIONAL"
-    assert decision.modelo_activo == "con_lag"
-    assert decision.lag_operativo_dias == 15
-    assert visible_models(decision) == (False, True)
+    assert decision.estado == "VERIFICACION_2_PENDIENTE"
+    assert decision.modelo_activo == "pendiente"
+    assert decision.lag_operativo_dias is None
+    assert decision.negativas_validas == 1
+    assert visible_models(decision) == (True, True)
 
 
-def test_positive_near_fixed_lag_confirms_lag():
+def test_two_negative_inspections_select_fixed_lag_and_hide_no_lag():
     peak0 = pd.Timestamp("2026-03-20")
     peak15 = pd.Timestamp("2026-04-04")
     data = pd.DataFrame(
-        [inspection("2026-03-20"), inspection("2026-04-03", True)]
+        [inspection("2026-03-20"), inspection("2026-03-23")]
+    )
+    decision = evaluate_selector(
+        peak0,
+        peak15,
+        data,
+        today=pd.Timestamp("2026-03-23"),
+    )
+    assert decision.estado == "CON_LAG_PROVISIONAL"
+    assert decision.modelo_activo == "con_lag"
+    assert decision.lag_operativo_dias == 15
+    assert decision.negativas_validas == 2
+    assert visible_models(decision) == (False, True)
+
+
+def test_positive_after_one_negative_confirms_no_lag():
+    peak0 = pd.Timestamp("2026-03-20")
+    peak15 = pd.Timestamp("2026-04-04")
+    data = pd.DataFrame(
+        [inspection("2026-03-20"), inspection("2026-03-23", True)]
+    )
+    decision = evaluate_selector(
+        peak0,
+        peak15,
+        data,
+        today=pd.Timestamp("2026-03-23"),
+    )
+    assert decision.estado == "SIN_LAG_CONFIRMADO"
+    assert decision.modelo_activo == "sin_lag"
+    assert visible_models(decision) == (True, False)
+
+
+def test_positive_near_fixed_lag_after_two_negatives_confirms_lag():
+    peak0 = pd.Timestamp("2026-03-20")
+    peak15 = pd.Timestamp("2026-04-04")
+    data = pd.DataFrame(
+        [
+            inspection("2026-03-20"),
+            inspection("2026-03-23"),
+            inspection("2026-04-03", True),
+        ]
     )
     decision = evaluate_selector(
         peak0,
@@ -61,11 +102,15 @@ def test_positive_near_fixed_lag_confirms_lag():
     assert visible_models(decision) == (False, True)
 
 
-def test_intermediate_positive_does_not_estimate_local_lag():
+def test_intermediate_positive_after_two_negatives_does_not_estimate_local_lag():
     peak0 = pd.Timestamp("2026-03-20")
     peak15 = pd.Timestamp("2026-04-04")
     data = pd.DataFrame(
-        [inspection("2026-03-20"), inspection("2026-03-28", True)]
+        [
+            inspection("2026-03-20"),
+            inspection("2026-03-23"),
+            inspection("2026-03-28", True),
+        ]
     )
     decision = evaluate_selector(
         peak0,
@@ -82,7 +127,9 @@ def test_intermediate_positive_does_not_estimate_local_lag():
 def test_no_emergence_in_both_windows_rejects_both_and_shows_diagnostic_curves():
     peak0 = pd.Timestamp("2026-03-20")
     peak15 = pd.Timestamp("2026-04-04")
-    data = pd.DataFrame([inspection("2026-03-20")])
+    data = pd.DataFrame(
+        [inspection("2026-03-20"), inspection("2026-03-23")]
+    )
     decision = evaluate_selector(
         peak0,
         peak15,
