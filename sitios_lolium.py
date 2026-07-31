@@ -6,7 +6,7 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class LoliumSite:
-    """Identidad geográfica de una implementación PREDWEEM–LOLIUM."""
+    """Identidad geográfica y fuente histórica de una implementación LOLIUM."""
 
     slug: str
     nombre: str
@@ -15,6 +15,7 @@ class LoliumSite:
     longitud: float
     repositorio: str
     timezone: str = "America/Argentina/Buenos_Aires"
+    usa_siga_historico: bool = False
 
     @property
     def etiqueta(self) -> str:
@@ -23,6 +24,13 @@ class LoliumSite:
     @property
     def repository_url(self) -> str:
         return f"https://github.com/{self.repositorio}"
+
+    @property
+    def raw_meteo_url(self) -> str:
+        return (
+            f"https://raw.githubusercontent.com/{self.repositorio}/"
+            "main/meteo_daily.csv"
+        )
 
     def meteo_path(self, base: str | Path = ".") -> Path:
         return Path(base) / "data" / "meteo_sitios" / f"{self.slug}.csv"
@@ -38,9 +46,9 @@ class LoliumSite:
 
 
 # Sitios inventariados a partir de los repositorios LOLIUM accesibles de PREDWEEM.
-# Las coordenadas corresponden a las configuraciones meteorológicas o del motor
-# ET0 declaradas en cada implementación. Bordenave conserva la latitud empleada
-# por su motor ET0 y la longitud operativa de su actualización meteorológica.
+# En Balcarce, Bordenave, Pergamino, San Pedro y Tres Arroyos los repositorios
+# geográficos ya construyen una serie consolidada con SIGA como observación
+# prioritaria y ECMWF únicamente como reemplazo provisional de huecos.
 SITES: dict[str, LoliumSite] = {
     "azul": LoliumSite(
         slug="azul",
@@ -57,6 +65,7 @@ SITES: dict[str, LoliumSite] = {
         latitud=-37.7664,
         longitud=-58.2999,
         repositorio="PREDWEEM/LOLIUM_BAL2026",
+        usa_siga_historico=True,
     ),
     "bordenave": LoliumSite(
         slug="bordenave",
@@ -65,6 +74,7 @@ SITES: dict[str, LoliumSite] = {
         latitud=-37.761671,
         longitud=-63.0200,
         repositorio="PREDWEEM/LOLIUM_BOR2026",
+        usa_siga_historico=True,
     ),
     "lartigau": LoliumSite(
         slug="lartigau",
@@ -89,6 +99,7 @@ SITES: dict[str, LoliumSite] = {
         latitud=-33.9443,
         longitud=-60.5745,
         repositorio="PREDWEEM/LOLIUM-PERGA2026",
+        usa_siga_historico=True,
     ),
     "san-pedro": LoliumSite(
         slug="san-pedro",
@@ -97,6 +108,7 @@ SITES: dict[str, LoliumSite] = {
         latitud=-33.7328,
         longitud=-59.7965,
         repositorio="PREDWEEM/lolium_sanpedro2026",
+        usa_siga_historico=True,
     ),
     "tres-arroyos": LoliumSite(
         slug="tres-arroyos",
@@ -105,6 +117,7 @@ SITES: dict[str, LoliumSite] = {
         latitud=-38.4500,
         longitud=-60.2763,
         repositorio="PREDWEEM/loliumTA_2026",
+        usa_siga_historico=True,
     ),
     "zavalla": LoliumSite(
         slug="zavalla",
@@ -144,6 +157,10 @@ def validate_registry() -> None:
             raise ValueError(f"Longitud inválida para {site.nombre}.")
         if not site.repositorio.startswith("PREDWEEM/"):
             raise ValueError(f"Repositorio inválido para {site.nombre}.")
+        if site.usa_siga_historico and not site.raw_meteo_url.endswith(
+            "/main/meteo_daily.csv"
+        ):
+            raise ValueError(f"Fuente SIGA inválida para {site.nombre}.")
 
 
 validate_registry()
