@@ -12,17 +12,17 @@ El sistema no estima lags locales intermedios.
 
 El catálogo `sitios_lolium.py` reúne todas las implementaciones geográficas LOLIUM accesibles de PREDWEEM:
 
-| Sitio | Provincia | Repositorio de referencia |
-|---|---|---|
-| Azul | Buenos Aires | `PREDWEEM/LOLIUM_AZUL2026` |
-| Balcarce | Buenos Aires | `PREDWEEM/LOLIUM_BAL2026` |
-| Bordenave | Buenos Aires | `PREDWEEM/LOLIUM_BOR2026` |
-| Lartigau | Buenos Aires | `PREDWEEM/LOLIUM_LARTIGAU-2026` |
-| Olavarría | Buenos Aires | `PREDWEEM/LOLIUM_OLAVA2026` |
-| Pergamino | Buenos Aires | `PREDWEEM/LOLIUM-PERGA2026` |
-| San Pedro | Buenos Aires | `PREDWEEM/lolium_sanpedro2026` |
-| Tres Arroyos | Buenos Aires | `PREDWEEM/loliumTA_2026` |
-| Zavalla | Santa Fe | `PREDWEEM/LOLIUMZAVALLA` |
+| Sitio | Provincia | Histórico prioritario | Repositorio de referencia |
+|---|---|---|---|
+| Azul | Buenos Aires | ECMWF IFS / Open-Meteo | `PREDWEEM/LOLIUM_AZUL2026` |
+| Balcarce | Buenos Aires | **SIGA–INTA** | `PREDWEEM/LOLIUM_BAL2026` |
+| Bordenave | Buenos Aires | **SIGA–INTA** | `PREDWEEM/LOLIUM_BOR2026` |
+| Lartigau | Buenos Aires | ECMWF IFS / Open-Meteo | `PREDWEEM/LOLIUM_LARTIGAU-2026` |
+| Olavarría | Buenos Aires | ECMWF IFS / Open-Meteo | `PREDWEEM/LOLIUM_OLAVA2026` |
+| Pergamino | Buenos Aires | **SIGA–INTA** | `PREDWEEM/LOLIUM-PERGA2026` |
+| San Pedro | Buenos Aires | **SIGA–INTA** | `PREDWEEM/lolium_sanpedro2026` |
+| Tres Arroyos | Buenos Aires | **SIGA–INTA** | `PREDWEEM/loliumTA_2026` |
+| Zavalla | Santa Fe | ECMWF IFS / Open-Meteo | `PREDWEEM/LOLIUMZAVALLA` |
 
 La selección geográfica cambia:
 
@@ -37,7 +37,7 @@ El motor adaptativo y sus umbrales científicos continúan siendo comunes. La ca
 
 ## Meteorología multisitio
 
-`update_meteo.py` descarga y valida una serie independiente para cada localidad usando ECMWF IFS mediante Open-Meteo:
+`update_meteo.py` construye una serie independiente para cada localidad:
 
 ```text
 data/meteo_sitios/azul.csv
@@ -51,9 +51,26 @@ data/meteo_sitios/tres-arroyos.csv
 data/meteo_sitios/zavalla.csv
 ```
 
+### Jerarquía histórica
+
+En **Balcarce, Bordenave, Pergamino, San Pedro y Tres Arroyos**, el actualizador descarga el `meteo_daily.csv` consolidado del repositorio geográfico correspondiente y aplica esta jerarquía:
+
+1. observación **SIGA–INTA** como dato histórico prioritario;
+2. fila provisional ECMWF ya registrada por el repositorio geográfico cuando SIGA tiene un hueco;
+3. Open-Meteo ECMWF IFS únicamente para completar una fecha todavía ausente;
+4. Open-Meteo ECMWF IFS Forecast desde el día actual.
+
+Una fila SIGA siempre reemplaza al respaldo modelado de la misma fecha. Si un sitio configurado como SIGA no aporta ninguna observación SIGA, la actualización se detiene y no guarda una serie completamente modelada como si fuera observada.
+
+En Azul, Lartigau, Olavarría y Zavalla se mantiene ECMWF IFS mediante Open-Meteo como histórico operativo dentro de esta aplicación multisitio.
+
+Las columnas `Fuente`, `TipoDato` y `CalidadDato` permiten distinguir observaciones, reemplazos provisionales y pronóstico.
+
 `meteo_daily.csv` se conserva como copia compatible de Zavalla.
 
 El workflow **Actualizar meteorología multisitio LOLIUM** se ejecuta dos veces por día y también admite ejecución manual. Primero descarga y valida los nueve sitios; solo después escribe los archivos, evitando actualizaciones parciales.
+
+Para leer repositorios geográficos privados puede configurarse el secreto de Actions `PREDWEEM_REPOS_TOKEN` con permiso de lectura sobre esos repositorios. En repositorios públicos no es necesario.
 
 ## Aislamiento de datos de campo
 
