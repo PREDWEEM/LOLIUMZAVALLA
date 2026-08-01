@@ -25,7 +25,7 @@ def _low_emergence_figure_1pct(
     model_name: str,
     today: Any,
 ) -> go.Figure:
-    """Limita el detalle a 0–1 % y destaca valores positivos con EMERREL <= 0,01."""
+    """Limita el detalle a 0–1 % y destaca valores entre 0,001 y 0,01."""
     figure = _ORIGINAL_LOW_EMERGENCE_FIGURE(
         data,
         smooth,
@@ -40,27 +40,30 @@ def _low_emergence_figure_1pct(
     daily["EMERREL"] = pd.to_numeric(daily["EMERREL"], errors="coerce")
     daily = daily.dropna(subset=["Fecha", "EMERREL"])
     highlighted = daily.loc[
-        (daily["EMERREL"] > 0.0)
+        (daily["EMERREL"] >= operational.EMERGENCE_THRESHOLD)
         & (daily["EMERREL"] <= LOW_EMERGENCE_MAX)
     ].copy()
     highlighted["EMERREL_PCT"] = highlighted["EMERREL"] * 100.0
 
     if not highlighted.empty:
+        # Se agrega al final para que los marcadores queden por encima de barras,
+        # tendencias y áreas sombreadas del panel base.
         figure.add_trace(
             go.Scatter(
                 x=highlighted["Fecha"],
                 y=highlighted["EMERREL_PCT"],
                 customdata=highlighted["EMERREL"],
                 mode="markers",
-                name="Valores EMERREL 0–0,01",
+                name="Valores EMERREL ≥ 0,001 y ≤ 0,01",
                 marker={
-                    "symbol": "circle-open",
+                    "symbol": "circle",
                     "size": 11,
-                    "color": "#dc2626",
-                    "line": {"color": "#dc2626", "width": 2.2},
+                    "color": "rgba(255,255,255,0.98)",
+                    "line": {"color": "#dc2626", "width": 2.4},
+                    "opacity": 1.0,
                 },
                 hovertemplate=(
-                    "<b>Valor destacado</b><br>"
+                    "<b>Valor sobre el umbral operativo</b><br>"
                     "Fecha: %{x|%d-%m-%Y}<br>"
                     "Intensidad relativa: %{y:.3f}%<br>"
                     "EMERREL: %{customdata:.4f}<extra></extra>"
@@ -94,8 +97,9 @@ def _plotly_chart_with_1pct_caption(*args: Any, **kwargs: Any):
                 "Ampliación de EMERREL 0–0,02 (0–2 %).",
                 (
                     "Ampliación de EMERREL 0–0,01 (0–1 %). "
-                    "Los círculos rojos identifican valores diarios positivos "
-                    "comprendidos en ese rango."
+                    "Los círculos con borde rojo identifican únicamente valores "
+                    "con EMERREL ≥ 0,001 y ≤ 0,01 y se muestran por encima de "
+                    "las áreas sombreadas."
                 ),
             )
         return original_caption(body, *caption_args, **caption_kwargs)
@@ -118,7 +122,7 @@ def _toggle_1pct(*args: Any, **kwargs: Any):
 
 
 def run() -> None:
-    """Ejecuta PREDWEEM con detalle operativo 0–1 % y círculos rojos."""
+    """Ejecuta PREDWEEM con detalle 0–1 % y puntos sobre el umbral."""
     original_max_pct = operational.LOW_EMERGENCE_MAX_PCT
     original_low_figure = operational._low_emergence_figure
     original_plotly = operational._plotly_chart_with_low_panel
