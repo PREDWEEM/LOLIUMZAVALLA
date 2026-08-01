@@ -11,7 +11,7 @@ import app_zoom_operativo as base
 
 
 EMERGENCE_THRESHOLD = 0.001
-LOW_EMERGENCE_MAX_PCT = 5.0
+LOW_EMERGENCE_MAX_PCT = 2.0
 LOW_EMERGENCE_THRESHOLD_PCT = EMERGENCE_THRESHOLD * 100.0
 
 _ORIGINAL_RENDER_EMERGENCE_SEMAPHORE = base._render_emergence_semaphore
@@ -98,7 +98,7 @@ def _low_emergence_figure(
     model_name: str,
     today: Any,
 ) -> go.Figure:
-    """Amplía la emergencia relativa comprendida entre 0 y 5 %."""
+    """Amplía la emergencia relativa comprendida entre 0 y 2 %."""
     daily = data.loc[:, ["Fecha", "EMERREL"]].copy()
     daily["Fecha"] = pd.to_datetime(daily["Fecha"], errors="coerce")
     daily["EMERREL"] = pd.to_numeric(daily["EMERREL"], errors="coerce")
@@ -195,7 +195,7 @@ def _low_emergence_figure(
             "text": (
                 "<b>Detalle operativo de baja emergencia</b><br>"
                 "<span style='font-size:12px;color:#64748b'>"
-                f"{site_name} · {model_name} · EMERREL 0–0,05"
+                f"{site_name} · {model_name} · EMERREL 0–0,02"
                 "</span>"
             ),
             "x": 0,
@@ -219,8 +219,8 @@ def _low_emergence_figure(
             },
             "range": [0.0, LOW_EMERGENCE_MAX_PCT],
             "tickmode": "array",
-            "tickvals": [0.0, 0.1, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0],
-            "ticktext": ["0", "0,1", "0,5", "1", "2", "3", "4", "5"],
+            "tickvals": [0.0, 0.1, 0.5, 1.0, 1.5, 2.0],
+            "ticktext": ["0", "0,1", "0,5", "1", "1,5", "2"],
             "ticksuffix": "%",
             "showgrid": True,
             "gridcolor": "rgba(148,163,184,0.24)",
@@ -250,7 +250,7 @@ def _low_emergence_figure(
 
 
 def _emergence_figure_with_low_panel(*args: Any, **kwargs: Any):
-    """Añade un panel sincronizado para valores EMERREL inferiores a 0,05."""
+    """Añade un panel sincronizado para valores EMERREL inferiores a 0,02."""
     figure, x_range = _ORIGINAL_EMERGENCE_FIGURE_WITH_PHENOLOGY(
         *args, **kwargs
     )
@@ -281,7 +281,7 @@ def _emergence_figure_with_low_panel(*args: Any, **kwargs: Any):
 
 
 def _plotly_chart_with_low_panel(*args: Any, **kwargs: Any):
-    """Renderiza el detalle 0–5 % debajo del gráfico principal."""
+    """Renderiza el detalle 0–2 % debajo del gráfico principal."""
     config = kwargs.get("config")
     if isinstance(config, Mapping) and config.get("scrollZoom"):
         kwargs["config"] = base._config_with_zoom(config)
@@ -312,7 +312,7 @@ def _plotly_chart_with_low_panel(*args: Any, **kwargs: Any):
             config=low_config,
         )
         st.caption(
-            "Ampliación de EMERREL 0–0,05 (0–5 %). "
+            "Ampliación de EMERREL 0–0,02 (0–2 %). "
             "La línea roja punteada indica el umbral operativo "
             "EMERREL ≥ 0,001 (0,1 %)."
         )
@@ -355,8 +355,8 @@ def run() -> None:
                     value=True,
                     key=f"low_emergence_panel_{site_slug}",
                     help=(
-                        "Muestra un panel sincronizado con eje Y de 0 a 5 % "
-                        "para distinguir valores EMERREL inferiores a 0,05. "
+                        "Muestra un panel sincronizado con eje Y de 0 a 2 % "
+                        "para distinguir valores EMERREL inferiores a 0,02. "
                         "Se aplica únicamente en escala Operativa (%)."
                     ),
                 )
