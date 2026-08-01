@@ -25,7 +25,7 @@ def _low_emergence_figure_1pct(
     model_name: str,
     today: Any,
 ) -> go.Figure:
-    """Limita el detalle a 0–1 % y destaca valores entre 0,001 y 0,01."""
+    """Limita el detalle a 0–1 % y destaca valores > 0,001 y <= 0,01."""
     figure = _ORIGINAL_LOW_EMERGENCE_FIGURE(
         data,
         smooth,
@@ -40,7 +40,7 @@ def _low_emergence_figure_1pct(
     daily["EMERREL"] = pd.to_numeric(daily["EMERREL"], errors="coerce")
     daily = daily.dropna(subset=["Fecha", "EMERREL"])
     highlighted = daily.loc[
-        (daily["EMERREL"] >= operational.EMERGENCE_THRESHOLD)
+        (daily["EMERREL"] > operational.EMERGENCE_THRESHOLD)
         & (daily["EMERREL"] <= LOW_EMERGENCE_MAX)
     ].copy()
     highlighted["EMERREL_PCT"] = highlighted["EMERREL"] * 100.0
@@ -54,7 +54,7 @@ def _low_emergence_figure_1pct(
                 y=highlighted["EMERREL_PCT"],
                 customdata=highlighted["EMERREL"],
                 mode="markers",
-                name="Valores EMERREL ≥ 0,001 y ≤ 0,01",
+                name="Valores EMERREL > 0,001 y ≤ 0,01",
                 marker={
                     "symbol": "circle",
                     "size": 11,
@@ -63,7 +63,7 @@ def _low_emergence_figure_1pct(
                     "opacity": 1.0,
                 },
                 hovertemplate=(
-                    "<b>Valor sobre el umbral operativo</b><br>"
+                    "<b>Valor superior al umbral operativo</b><br>"
                     "Fecha: %{x|%d-%m-%Y}<br>"
                     "Intensidad relativa: %{y:.3f}%<br>"
                     "EMERREL: %{customdata:.4f}<extra></extra>"
@@ -98,8 +98,8 @@ def _plotly_chart_with_1pct_caption(*args: Any, **kwargs: Any):
                 (
                     "Ampliación de EMERREL 0–0,01 (0–1 %). "
                     "Los círculos con borde rojo identifican únicamente valores "
-                    "con EMERREL ≥ 0,001 y ≤ 0,01 y se muestran por encima de "
-                    "las áreas sombreadas."
+                    "con EMERREL > 0,001 y ≤ 0,01 y se muestran por encima de "
+                    "las áreas sombreadas. Los valores EMERREL ≤ 0,001 no se marcan."
                 ),
             )
         return original_caption(body, *caption_args, **caption_kwargs)
