@@ -49,7 +49,7 @@ def _figure_meta(figure: Any) -> Mapping[str, Any]:
 
 
 def _render_emergence_semaphore(status: Mapping[str, Any]) -> None:
-    """Muestra el semáforo de emergencia inmediatamente debajo del panel térmico."""
+    """Muestra el semáforo inmediatamente debajo del gráfico de emergencia."""
     available_days = int(status.get("available_days", 0))
     start_label = str(status.get("start_label", "—"))
     end_label = str(status.get("end_label", "—"))
@@ -131,7 +131,7 @@ def _render_emergence_semaphore(status: Mapping[str, Any]) -> None:
 
 
 def _plotly_chart_with_zoom(*args: Any, **kwargs: Any):
-    """Añade la lupa y renderiza el semáforo después del panel térmico."""
+    """Añade la lupa y muestra el semáforo bajo el gráfico que lo contiene."""
     config = kwargs.get("config")
     if isinstance(config, Mapping) and config.get("scrollZoom"):
         kwargs["config"] = _config_with_zoom(config)
@@ -147,46 +147,6 @@ def _plotly_chart_with_zoom(*args: Any, **kwargs: Any):
 def _date_from_annotation(text: str) -> str:
     """Recupera la fecha ya formateada desde una anotación de Plotly."""
     return text.split("<br>", 1)[1] if "<br>" in text else ""
-
-
-def _emergence_figure_with_phenology(*args: Any, **kwargs: Any):
-    """Mantiene los límites fenológicos y elimina carteles superpuestos."""
-    figure, x_range = _ORIGINAL_EMERGENCE_FIGURE(*args, **kwargs)
-    kept_annotations = []
-
-    for annotation in figure.layout.annotations or ():
-        text = str(annotation.text or "")
-
-        if text == "<b>Ventana recomendada de intervención</b>":
-            continue
-        if "<b>Primer pico válido</b>" in text:
-            continue
-
-        if "<b>600 °Cd</b>" in text:
-            date_label = _date_from_annotation(text)
-            annotation.update(
-                text=(
-                    "<b>2–3 macollos</b><br>"
-                    f"600 °Cd · {date_label}"
-                )
-            )
-        elif "<b>800 °Cd</b>" in text:
-            date_label = _date_from_annotation(text)
-            annotation.update(
-                text=(
-                    "<b>6 macollos</b><br>"
-                    f"800 °Cd · {date_label}"
-                )
-            )
-
-        kept_annotations.append(annotation)
-
-    figure.update_layout(
-        annotations=kept_annotations,
-        showlegend=False,
-    )
-    figure.update_traces(showlegend=False)
-    return figure, x_range
 
 
 def _seven_day_emergence_forecast(data: Any, today: Any) -> dict[str, Any]:
@@ -234,8 +194,54 @@ def _seven_day_emergence_forecast(data: Any, today: Any) -> dict[str, Any]:
     return status
 
 
+def _emergence_figure_with_phenology(*args: Any, **kwargs: Any):
+    """Mantiene los límites fenológicos y añade el semáforo al gráfico principal."""
+    figure, x_range = _ORIGINAL_EMERGENCE_FIGURE(*args, **kwargs)
+    kept_annotations = []
+
+    for annotation in figure.layout.annotations or ():
+        text = str(annotation.text or "")
+
+        if text == "<b>Ventana recomendada de intervención</b>":
+            continue
+        if "<b>Primer pico válido</b>" in text:
+            continue
+
+        if "<b>600 °Cd</b>" in text:
+            date_label = _date_from_annotation(text)
+            annotation.update(
+                text=(
+                    "<b>2–3 macollos</b><br>"
+                    f"600 °Cd · {date_label}"
+                )
+            )
+        elif "<b>800 °Cd</b>" in text:
+            date_label = _date_from_annotation(text)
+            annotation.update(
+                text=(
+                    "<b>6 macollos</b><br>"
+                    f"800 °Cd · {date_label}"
+                )
+            )
+
+        kept_annotations.append(annotation)
+
+    data = args[0] if args else kwargs.get("data")
+    today = args[9] if len(args) > 9 else kwargs.get("today")
+    metadata = dict(_figure_meta(figure))
+    metadata[_SEMAPHORE_META_KEY] = _seven_day_emergence_forecast(data, today)
+
+    figure.update_layout(
+        annotations=kept_annotations,
+        showlegend=False,
+        meta=metadata,
+    )
+    figure.update_traces(showlegend=False)
+    return figure, x_range
+
+
 def _thermal_figure_with_phenology(*args: Any, **kwargs: Any):
-    """Relaciona umbrales térmicos y añade el pronóstico de emergencia a 7 días."""
+    """Relaciona los umbrales térmicos con los estados de macollaje."""
     figure = _ORIGINAL_THERMAL_FIGURE(*args, **kwargs)
 
     for annotation in figure.layout.annotations or ():
@@ -245,11 +251,6 @@ def _thermal_figure_with_phenology(*args: Any, **kwargs: Any):
         elif "800 °Cd · fin de ventana" in text:
             annotation.update(text="6 macollos · 800 °Cd · fin de ventana")
 
-    data = args[0] if args else kwargs.get("data")
-    today = args[2] if len(args) > 2 else kwargs.get("today")
-    metadata = dict(_figure_meta(figure))
-    metadata[_SEMAPHORE_META_KEY] = _seven_day_emergence_forecast(data, today)
-    figure.update_layout(meta=metadata)
     return figure
 
 
