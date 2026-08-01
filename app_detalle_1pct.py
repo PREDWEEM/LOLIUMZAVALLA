@@ -44,10 +44,10 @@ def _isolated_operational_dates(daily: pd.DataFrame) -> set[pd.Timestamp]:
 
     Se replica el criterio temporal de agrupación de las campañas: dos flujos
     pertenecen al mismo grupo cuando entre ellos existen como máximo tres días
-    sin una señal superior al umbral operativo.
+    sin una señal igual o superior al umbral operativo.
     """
     active = daily.loc[
-        daily["EMERREL"] > operational.EMERGENCE_THRESHOLD,
+        daily["EMERREL"] >= operational.EMERGENCE_THRESHOLD,
         ["Fecha"],
     ].copy()
     if active.empty:
@@ -120,7 +120,7 @@ def _low_emergence_figure_2pct(
     isolated_dates = _isolated_operational_dates(daily)
 
     highlighted = daily.loc[
-        (daily["EMERREL"] > operational.EMERGENCE_THRESHOLD)
+        (daily["EMERREL"] >= operational.EMERGENCE_THRESHOLD)
         & (daily["EMERREL"] <= LOW_EMERGENCE_MAX)
         & (daily["Fecha"].isin(isolated_dates))
     ].copy()
@@ -171,8 +171,8 @@ def _low_emergence_figure_2pct(
     figure.update_yaxes(
         range=[0.0, LOW_EMERGENCE_MAX_PCT],
         tickmode="array",
-        tickvals=[0.0, 0.1, 0.5, 1.0, 1.5, 2.0],
-        ticktext=["0", "0,1", "0,5", "1", "1,5", "2"],
+        tickvals=[0.0, 0.01, 0.1, 0.5, 1.0, 1.5, 2.0],
+        ticktext=["0", "0,01", "0,1", "0,5", "1", "1,5", "2"],
     )
     return figure
 
@@ -186,7 +186,7 @@ def _plotly_chart_with_2pct_caption(*args: Any, **kwargs: Any):
             replacement = (
                 "Ampliación de EMERREL 0–0,02 (0–2 %). "
                 "Los círculos con borde rojo identifican solamente flujos "
-                "aislados con EMERREL > 0,001 y ≤ 0,02. No se marcan puntos "
+                "aislados con EMERREL ≥ 0,0001 y ≤ 0,02. No se marcan puntos "
                 "agrupados con otros flujos ni ubicados bajo las campañas "
                 "pintadas."
             )
