@@ -10,8 +10,8 @@ import streamlit as st
 import app_umbral_operativo as operational
 
 
-LOW_EMERGENCE_MAX_PCT = 1.0
-LOW_EMERGENCE_MAX = 0.01
+LOW_EMERGENCE_MAX_PCT = 5.0
+LOW_EMERGENCE_MAX = 0.05
 MAX_DIAS_SIN_FLUJO = 3
 CAMPAIGN_EPSILON = 1e-12
 
@@ -98,7 +98,7 @@ def _campaign_values_at_dates(
     )
 
 
-def _low_emergence_figure_1pct(
+def _low_emergence_figure_5pct(
     data: Any,
     smooth: Any,
     x_range: Any,
@@ -106,7 +106,7 @@ def _low_emergence_figure_1pct(
     model_name: str,
     today: Any,
 ) -> go.Figure:
-    """Destaca solo flujos aislados fuera de las campañas pintadas."""
+    """Amplía 0–5 % y destaca solo flujos aislados fuera de campañas."""
     figure = _ORIGINAL_LOW_EMERGENCE_FIGURE(
         data,
         smooth,
@@ -164,66 +164,71 @@ def _low_emergence_figure_1pct(
             )
         )
 
-    title_text = str(figure.layout.title.text or "").replace(
-        "EMERREL 0–0,02",
-        "EMERREL 0–0,01",
-    )
+    title_text = str(figure.layout.title.text or "")
+    for previous in ("EMERREL 0–0,01", "EMERREL 0–0,02"):
+        title_text = title_text.replace(previous, "EMERREL 0–0,05")
     figure.update_layout(title={"text": title_text})
     figure.update_yaxes(
         range=[0.0, LOW_EMERGENCE_MAX_PCT],
         tickmode="array",
-        tickvals=[0.0, 0.1, 0.25, 0.5, 0.75, 1.0],
-        ticktext=["0", "0,1", "0,25", "0,5", "0,75", "1"],
+        tickvals=[0.0, 0.1, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0],
+        ticktext=["0", "0,1", "0,5", "1", "2", "3", "4", "5"],
     )
     return figure
 
 
-def _plotly_chart_with_1pct_caption(*args: Any, **kwargs: Any):
-    """Actualiza el texto del panel 0–1 % durante su renderizado."""
+def _plotly_chart_with_5pct_caption(*args: Any, **kwargs: Any):
+    """Actualiza el texto del panel 0–5 % durante su renderizado."""
     original_caption = st.caption
 
-    def caption_1pct(body: Any, *caption_args: Any, **caption_kwargs: Any):
+    def caption_5pct(body: Any, *caption_args: Any, **caption_kwargs: Any):
         if isinstance(body, str):
-            body = body.replace(
+            for previous in (
                 "Ampliación de EMERREL 0–0,02 (0–2 %).",
-                (
-                    "Ampliación de EMERREL 0–0,01 (0–1 %). "
-                    "Los círculos con borde rojo identifican solamente flujos "
-                    "aislados con EMERREL > 0,001 y ≤ 0,01. No se marcan puntos "
-                    "agrupados con otros flujos ni ubicados bajo las campañas "
-                    "pintadas."
-                ),
-            )
+                "Ampliación de EMERREL 0–0,01 (0–1 %).",
+            ):
+                body = body.replace(
+                    previous,
+                    (
+                        "Ampliación de EMERREL 0–0,05 (0–5 %). "
+                        "Los círculos con borde rojo identifican solamente flujos "
+                        "aislados con EMERREL > 0,001 y ≤ 0,05. No se marcan puntos "
+                        "agrupados con otros flujos ni ubicados bajo las campañas "
+                        "pintadas."
+                    ),
+                )
         return original_caption(body, *caption_args, **caption_kwargs)
 
-    st.caption = caption_1pct
+    st.caption = caption_5pct
     try:
         return _ORIGINAL_PLOTLY_WITH_LOW_PANEL(*args, **kwargs)
     finally:
         st.caption = original_caption
 
 
-def _toggle_1pct(*args: Any, **kwargs: Any):
+def _toggle_5pct(*args: Any, **kwargs: Any):
     """Actualiza la ayuda del control del panel ampliado."""
     help_text = kwargs.get("help")
     if isinstance(help_text, str):
-        help_text = help_text.replace("0 a 2 %", "0 a 1 %")
-        help_text = help_text.replace("inferiores a 0,02", "hasta 0,01")
+        help_text = help_text.replace("0 a 2 %", "0 a 5 %")
+        help_text = help_text.replace("0 a 1 %", "0 a 5 %")
+        help_text = help_text.replace("inferiores a 0,02", "hasta 0,05")
+        help_text = help_text.replace("hasta 0,01", "hasta 0,05")
         kwargs["help"] = help_text
     return _ORIGINAL_TOGGLE(*args, **kwargs)
 
 
 def run() -> None:
-    """Ejecuta PREDWEEM con detalle 0–1 % y flujos aislados."""
+    """Ejecuta PREDWEEM con detalle 0–5 % y flujos aislados."""
     original_max_pct = operational.LOW_EMERGENCE_MAX_PCT
     original_low_figure = operational._low_emergence_figure
     original_plotly = operational._plotly_chart_with_low_panel
     original_toggle = st.toggle
 
     operational.LOW_EMERGENCE_MAX_PCT = LOW_EMERGENCE_MAX_PCT
-    operational._low_emergence_figure = _low_emergence_figure_1pct
-    operational._plotly_chart_with_low_panel = _plotly_chart_with_1pct_caption
-    st.toggle = _toggle_1pct
+    operational._low_emergence_figure = _low_emergence_figure_5pct
+    operational._plotly_chart_with_low_panel = _plotly_chart_with_5pct_caption
+    st.toggle = _toggle_5pct
 
     try:
         operational.run()
