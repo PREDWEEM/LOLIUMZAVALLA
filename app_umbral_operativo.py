@@ -10,6 +10,7 @@ import app_zoom_operativo as base
 
 
 EMERGENCE_THRESHOLD = 0.001
+_ORIGINAL_RENDER_EMERGENCE_SEMAPHORE = base._render_emergence_semaphore
 
 
 def _seven_day_emergence_forecast(data: Any, today: Any) -> dict[str, Any]:
@@ -77,7 +78,7 @@ def _render_emergence_semaphore(status: Mapping[str, Any]) -> None:
 
     st.markdown = markdown_with_threshold
     try:
-        base._render_emergence_semaphore(status)
+        _ORIGINAL_RENDER_EMERGENCE_SEMAPHORE(status)
     finally:
         st.markdown = original_markdown
 
