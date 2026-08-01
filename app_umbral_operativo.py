@@ -10,7 +10,7 @@ import streamlit as st
 import app_zoom_operativo as base
 
 
-EMERGENCE_THRESHOLD = 0.001
+EMERGENCE_THRESHOLD = 0.0001
 LOW_EMERGENCE_MAX_PCT = 2.0
 LOW_EMERGENCE_THRESHOLD_PCT = EMERGENCE_THRESHOLD * 100.0
 
@@ -21,7 +21,7 @@ _SHOW_LOW_PANEL = True
 
 
 def _seven_day_emergence_forecast(data: Any, today: Any) -> dict[str, Any]:
-    """Evalúa emergencia futura con el criterio EMERREL >= 0,001."""
+    """Evalúa emergencia futura con el criterio EMERREL >= 0,0001."""
     today_date = pd.Timestamp(today).normalize()
     start_date = today_date + pd.Timedelta(days=1)
     end_date = today_date + pd.Timedelta(days=base._FORECAST_DAYS)
@@ -77,8 +77,8 @@ def _render_emergence_semaphore(status: Mapping[str, Any]) -> None:
     def markdown_with_threshold(body: Any, *args: Any, **kwargs: Any):
         if isinstance(body, str):
             body = re.sub(
-                r"EMERREL &gt; [0-9.]+",
-                "EMERREL &gt;= 0.001",
+                r"EMERREL &gt;=? [0-9.]+",
+                "EMERREL &gt;= 0.0001",
                 body,
             )
         return original_markdown(body, *args, **kwargs)
@@ -171,7 +171,7 @@ def _low_emergence_figure(
         line_color="#dc2626",
         annotation_text=(
             "<b>Umbral operativo</b> · "
-            "EMERREL ≥ 0,001 (0,1 %)"
+            "EMERREL ≥ 0,0001 (0,01 %)"
         ),
         annotation_position="top left",
         annotation_font={"size": 10, "color": "#991b1b"},
@@ -219,8 +219,8 @@ def _low_emergence_figure(
             },
             "range": [0.0, LOW_EMERGENCE_MAX_PCT],
             "tickmode": "array",
-            "tickvals": [0.0, 0.1, 0.5, 1.0, 1.5, 2.0],
-            "ticktext": ["0", "0,1", "0,5", "1", "1,5", "2"],
+            "tickvals": [0.0, 0.01, 0.1, 0.5, 1.0, 1.5, 2.0],
+            "ticktext": ["0", "0,01", "0,1", "0,5", "1", "1,5", "2"],
             "ticksuffix": "%",
             "showgrid": True,
             "gridcolor": "rgba(148,163,184,0.24)",
@@ -314,7 +314,7 @@ def _plotly_chart_with_low_panel(*args: Any, **kwargs: Any):
         st.caption(
             "Ampliación de EMERREL 0–0,02 (0–2 %). "
             "La línea roja punteada indica el umbral operativo "
-            "EMERREL ≥ 0,001 (0,1 %)."
+            "EMERREL ≥ 0,0001 (0,01 %)."
         )
 
     semaphore = base._figure_meta(figure).get(base._SEMAPHORE_META_KEY)
