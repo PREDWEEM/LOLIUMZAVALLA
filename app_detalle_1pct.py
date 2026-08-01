@@ -12,7 +12,6 @@ import app_umbral_operativo as operational
 
 LOW_EMERGENCE_MAX_PCT = 2.0
 LOW_EMERGENCE_MAX = 0.02
-MAX_DIAS_SIN_FLUJO = 3
 CAMPAIGN_EPSILON = 1e-12
 
 _ORIGINAL_LOW_EMERGENCE_FIGURE = operational._low_emergence_figure
@@ -37,32 +36,6 @@ def _canonical_daily(data: Any) -> pd.DataFrame:
         .max()
         .reset_index(drop=True)
     )
-
-
-def _isolated_operational_dates(daily: pd.DataFrame) -> set[pd.Timestamp]:
-    """Devuelve fechas pertenecientes a grupos con un solo flujo operativo.
-
-    Se replica el criterio temporal de agrupación de las campañas: dos flujos
-    pertenecen al mismo grupo cuando entre ellos existen como máximo tres días
-    sin una señal igual o superior al umbral operativo.
-    """
-    active = daily.loc[
-        daily["EMERREL"] >= operational.EMERGENCE_THRESHOLD,
-        ["Fecha"],
-    ].copy()
-    if active.empty:
-        return set()
-
-    active = active.sort_values("Fecha").reset_index(drop=True)
-    maximum_date_gap = MAX_DIAS_SIN_FLUJO + 1
-    starts_new_group = (
-        active["Fecha"].diff().dt.days.fillna(maximum_date_gap + 1)
-        > maximum_date_gap
-    )
-    active["Grupo"] = starts_new_group.cumsum()
-    group_sizes = active.groupby("Grupo")["Fecha"].transform("size")
-
-    return set(active.loc[group_sizes == 1, "Fecha"].tolist())
 
 
 def _campaign_values_at_dates(
@@ -106,7 +79,7 @@ def _low_emergence_figure_2pct(
     model_name: str,
     today: Any,
 ) -> go.Figure:
-    """Amplía 0–2 % y destaca solo flujos aislados fuera de campañas."""
+    """Amplía 0–2 % y destaca puntos que están fuera de las campanas."""
     figure = _ORIGINAL_LOW_EMERGENCE_FIGURE(
         data,
         smooth,
@@ -117,12 +90,9 @@ def _low_emergence_figure_2pct(
     )
 
     daily = _canonical_daily(data)
-    isolated_dates = _isolated_operational_dates(daily)
-
     highlighted = daily.loc[
         (daily["EMERREL"] >= operational.EMERGENCE_THRESHOLD)
         & (daily["EMERREL"] <= LOW_EMERGENCE_MAX)
-        & (daily["Fecha"].isin(isolated_dates))
     ].copy()
 
     if not highlighted.empty:
@@ -138,14 +108,14 @@ def _low_emergence_figure_2pct(
 
     if not highlighted.empty:
         # La traza se agrega al final para que los círculos queden por encima de
-        # barras y líneas. No se agregan marcadores donde exista área pintada.
+        # barras y líneas. Solo se incluyen fechas sin área de campana pintada.
         figure.add_trace(
             go.Scatter(
                 x=highlighted["Fecha"],
                 y=highlighted["EMERREL_PCT"],
                 customdata=highlighted["EMERREL"],
                 mode="markers",
-                name="Flujos aislados fuera de campañas",
+                name="Puntos fuera de las campanas",
                 marker={
                     "symbol": "circle",
                     "size": 11,
@@ -154,7 +124,7 @@ def _low_emergence_figure_2pct(
                     "opacity": 1.0,
                 },
                 hovertemplate=(
-                    "<b>Flujo aislado fuera de campaña</b><br>"
+                    "<b>Punto fuera de las campanas</b><br>"
                     "Fecha: %{x|%d-%m-%Y}<br>"
                     "Intensidad relativa: %{y:.3f}%<br>"
                     "EMERREL: %{customdata:.4f}<extra></extra>"
@@ -185,10 +155,9 @@ def _plotly_chart_with_2pct_caption(*args: Any, **kwargs: Any):
         if isinstance(body, str):
             replacement = (
                 "Ampliación de EMERREL 0–0,02 (0–2 %). "
-                "Los círculos con borde rojo identifican solamente flujos "
-                "aislados con EMERREL ≥ 0,0001 y ≤ 0,02. No se marcan puntos "
-                "agrupados con otros flujos ni ubicados bajo las campañas "
-                "pintadas."
+                "Los círculos con borde rojo identifican los puntos con "
+                "EMERREL ≥ 0,0001 y ≤ 0,02 que no están incluidos bajo "
+                "las campanas pintadas."
             )
             for previous in (
                 "Ampliación de EMERREL 0–0,05 (0–5 %).",
@@ -220,7 +189,7 @@ def _toggle_2pct(*args: Any, **kwargs: Any):
 
 
 def run() -> None:
-    """Ejecuta PREDWEEM con detalle 0–2 % y flujos aislados."""
+    """Ejecuta PREDWEEM con detalle 0–2 % y puntos fuera de las campanas."""
     original_max_pct = operational.LOW_EMERGENCE_MAX_PCT
     original_low_figure = operational._low_emergence_figure
     original_plotly = operational._plotly_chart_with_low_panel
