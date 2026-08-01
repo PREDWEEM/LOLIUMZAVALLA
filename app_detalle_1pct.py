@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -11,10 +12,90 @@ import app_umbral_operativo as operational
 
 LOW_EMERGENCE_MAX_PCT = 1.0
 LOW_EMERGENCE_MAX = 0.01
+MAX_DIAS_SIN_FLUJO = 3
+CAMPAIGN_EPSILON = 1e-12
 
 _ORIGINAL_LOW_EMERGENCE_FIGURE = operational._low_emergence_figure
 _ORIGINAL_PLOTLY_WITH_LOW_PANEL = operational._plotly_chart_with_low_panel
 _ORIGINAL_TOGGLE = st.toggle
+
+
+def _canonical_daily(data: Any) -> pd.DataFrame:
+    """Normaliza la serie diaria y conserva el máximo EMERREL por fecha."""
+    daily = data.loc[:, ["Fecha", "EMERREL"]].copy()
+    daily["Fecha"] = pd.to_datetime(
+        daily["Fecha"], errors="coerce"
+    ).dt.normalize()
+    daily["EMERREL"] = pd.to_numeric(
+        daily["EMERREL"], errors="coerce"
+    )
+    daily = daily.dropna(subset=["Fecha", "EMERREL"])
+    if daily.empty:
+        return daily
+    return (
+        daily.groupby("Fecha", as_index=False, sort=True)["EMERREL"]
+        .max()
+        .reset_index(drop=True)
+    )
+
+
+def _isolated_operational_dates(daily: pd.DataFrame) -> set[pd.Timestamp]:
+    """Devuelve fechas pertenecientes a grupos con un solo flujo operativo.
+
+    Se replica el criterio temporal de agrupación de las campañas: dos flujos
+    pertenecen al mismo grupo cuando entre ellos existen como máximo tres días
+    sin una señal superior al umbral operativo.
+    """
+    active = daily.loc[
+        daily["EMERREL"] > operational.EMERGENCE_THRESHOLD,
+        ["Fecha"],
+    ].copy()
+    if active.empty:
+        return set()
+
+    active = active.sort_values("Fecha").reset_index(drop=True)
+    maximum_date_gap = MAX_DIAS_SIN_FLUJO + 1
+    starts_new_group = (
+        active["Fecha"].diff().dt.days.fillna(maximum_date_gap + 1)
+        > maximum_date_gap
+    )
+    active["Grupo"] = starts_new_group.cumsum()
+    group_sizes = active.groupby("Grupo")["Fecha"].transform("size")
+
+    return set(active.loc[group_sizes == 1, "Fecha"].tolist())
+
+
+def _campaign_values_at_dates(
+    smooth: Any,
+    dates: pd.Series,
+) -> np.ndarray:
+    """Interpola la envolvente pintada en las fechas de los candidatos."""
+    trend = smooth.loc[:, ["Fecha", "EMERREL_CAMPANA"]].copy()
+    trend["Fecha"] = pd.to_datetime(
+        trend["Fecha"], errors="coerce"
+    )
+    trend["EMERREL_CAMPANA"] = pd.to_numeric(
+        trend["EMERREL_CAMPANA"], errors="coerce"
+    )
+    trend = (
+        trend.dropna(subset=["Fecha", "EMERREL_CAMPANA"])
+        .sort_values("Fecha")
+        .drop_duplicates(subset=["Fecha"], keep="last")
+    )
+    if trend.empty or dates.empty:
+        return np.zeros(len(dates), dtype=float)
+
+    trend_x = trend["Fecha"].astype("int64").to_numpy(dtype=np.int64)
+    trend_y = trend["EMERREL_CAMPANA"].to_numpy(dtype=float)
+    candidate_x = pd.to_datetime(dates).astype("int64").to_numpy(dtype=np.int64)
+
+    return np.interp(
+        candidate_x.astype(float),
+        trend_x.astype(float),
+        trend_y,
+        left=0.0,
+        right=0.0,
+    )
 
 
 def _low_emergence_figure_1pct(
@@ -25,7 +106,7 @@ def _low_emergence_figure_1pct(
     model_name: str,
     today: Any,
 ) -> go.Figure:
-    """Limita el detalle a 0–1 % y destaca valores > 0,001 y <= 0,01."""
+    """Destaca solo flujos aislados fuera de las campañas pintadas."""
     figure = _ORIGINAL_LOW_EMERGENCE_FIGURE(
         data,
         smooth,
@@ -35,26 +116,36 @@ def _low_emergence_figure_1pct(
         today,
     )
 
-    daily = data.loc[:, ["Fecha", "EMERREL"]].copy()
-    daily["Fecha"] = pd.to_datetime(daily["Fecha"], errors="coerce")
-    daily["EMERREL"] = pd.to_numeric(daily["EMERREL"], errors="coerce")
-    daily = daily.dropna(subset=["Fecha", "EMERREL"])
+    daily = _canonical_daily(data)
+    isolated_dates = _isolated_operational_dates(daily)
+
     highlighted = daily.loc[
         (daily["EMERREL"] > operational.EMERGENCE_THRESHOLD)
         & (daily["EMERREL"] <= LOW_EMERGENCE_MAX)
+        & (daily["Fecha"].isin(isolated_dates))
     ].copy()
+
+    if not highlighted.empty:
+        highlighted["EMERREL_CAMPANA"] = _campaign_values_at_dates(
+            smooth,
+            highlighted["Fecha"],
+        )
+        highlighted = highlighted.loc[
+            highlighted["EMERREL_CAMPANA"] <= CAMPAIGN_EPSILON
+        ].copy()
+
     highlighted["EMERREL_PCT"] = highlighted["EMERREL"] * 100.0
 
     if not highlighted.empty:
-        # Se agrega al final para que los marcadores queden por encima de barras,
-        # tendencias y áreas sombreadas del panel base.
+        # La traza se agrega al final para que los círculos queden por encima de
+        # barras y líneas. No se agregan marcadores donde exista área pintada.
         figure.add_trace(
             go.Scatter(
                 x=highlighted["Fecha"],
                 y=highlighted["EMERREL_PCT"],
                 customdata=highlighted["EMERREL"],
                 mode="markers",
-                name="Valores EMERREL > 0,001 y ≤ 0,01",
+                name="Flujos aislados fuera de campañas",
                 marker={
                     "symbol": "circle",
                     "size": 11,
@@ -63,7 +154,7 @@ def _low_emergence_figure_1pct(
                     "opacity": 1.0,
                 },
                 hovertemplate=(
-                    "<b>Valor superior al umbral operativo</b><br>"
+                    "<b>Flujo aislado fuera de campaña</b><br>"
                     "Fecha: %{x|%d-%m-%Y}<br>"
                     "Intensidad relativa: %{y:.3f}%<br>"
                     "EMERREL: %{customdata:.4f}<extra></extra>"
@@ -97,9 +188,10 @@ def _plotly_chart_with_1pct_caption(*args: Any, **kwargs: Any):
                 "Ampliación de EMERREL 0–0,02 (0–2 %).",
                 (
                     "Ampliación de EMERREL 0–0,01 (0–1 %). "
-                    "Los círculos con borde rojo identifican únicamente valores "
-                    "con EMERREL > 0,001 y ≤ 0,01 y se muestran por encima de "
-                    "las áreas sombreadas. Los valores EMERREL ≤ 0,001 no se marcan."
+                    "Los círculos con borde rojo identifican solamente flujos "
+                    "aislados con EMERREL > 0,001 y ≤ 0,01. No se marcan puntos "
+                    "agrupados con otros flujos ni ubicados bajo las campañas "
+                    "pintadas."
                 ),
             )
         return original_caption(body, *caption_args, **caption_kwargs)
@@ -122,7 +214,7 @@ def _toggle_1pct(*args: Any, **kwargs: Any):
 
 
 def run() -> None:
-    """Ejecuta PREDWEEM con detalle 0–1 % y puntos sobre el umbral."""
+    """Ejecuta PREDWEEM con detalle 0–1 % y flujos aislados."""
     original_max_pct = operational.LOW_EMERGENCE_MAX_PCT
     original_low_figure = operational._low_emergence_figure
     original_plotly = operational._plotly_chart_with_low_panel
