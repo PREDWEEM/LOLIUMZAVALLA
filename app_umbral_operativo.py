@@ -84,14 +84,22 @@ def _render_emergence_semaphore(status: Mapping[str, Any]) -> None:
 
 
 def run() -> None:
-    """Ejecuta la aplicación con umbral de emergencia EMERREL >= 0,001."""
+    """Ejecuta la aplicación con campaña completa y umbral operativo actualizado."""
     original_threshold = base._EMERGENCE_THRESHOLD
     original_forecast = base._seven_day_emergence_forecast
     original_renderer = base._render_emergence_semaphore
+    original_toggle = st.toggle
+
+    def toggle_with_full_campaign_default(*args: Any, **kwargs: Any):
+        key = str(kwargs.get("key", ""))
+        if key.startswith("full_campaign_"):
+            kwargs["value"] = True
+        return original_toggle(*args, **kwargs)
 
     base._EMERGENCE_THRESHOLD = EMERGENCE_THRESHOLD
     base._seven_day_emergence_forecast = _seven_day_emergence_forecast
     base._render_emergence_semaphore = _render_emergence_semaphore
+    st.toggle = toggle_with_full_campaign_default
 
     try:
         base.run()
@@ -99,3 +107,4 @@ def run() -> None:
         base._EMERGENCE_THRESHOLD = original_threshold
         base._seven_day_emergence_forecast = original_forecast
         base._render_emergence_semaphore = original_renderer
+        st.toggle = original_toggle
