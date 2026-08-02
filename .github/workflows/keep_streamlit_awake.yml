@@ -1,0 +1,60 @@
+name: Mantener Streamlit disponible
+
+on:
+  schedule:
+    # Community Cloud hiberna las apps sin tráfico durante 12 horas.
+    # Se usa el minuto 17 para evitar la congestión habitual al inicio de la hora.
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: streamlit-availability-check
+  cancel-in-progress: true
+
+jobs:
+  visit-streamlit-app:
+    name: Visitar aplicación PREDWEEM
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Comprobar respuesta de Streamlit
+        env:
+          APP_URL: "https://f8d5dqg4evu9tvthrrffkl.streamlit.app/"
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          response_file="${RUNNER_TEMP}/streamlit-response.html"
+          http_status="$ (
+            curl \
+              --location \
+              --silent \
+              --show-error \
+              --output "${response_file}" \
+              --write-out "%{http_code}" \
+              --connect-timeout 20 \
+              --max-time 60 \
+              --retry 2 \
+              --retry-delay 5 \
+              --retry-all-errors \
+              --user-agent "PREDWEEM-availability-check/1.0" \
+              "${APP_URL}"
+          )"
+
+          echo "Código HTTP recibido: ${http_status}"
+
+          if [[ "${http_status}" -lt 200 || "${http_status}" -ge 400 ]]; then
+            echo "La aplicación no respondió correctamente."
+            exit 1
+          fi
+
+          if grep -Eqi "gone to sleep|app has gone to sleep|zzz" "${response_file}"; then
+            echo "La aplicación respondió con una página de hibernación."
+            exit 1
+          fi
+
+          echo "La aplicación respondió y permanece disponible."
