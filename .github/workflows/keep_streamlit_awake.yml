@@ -29,7 +29,7 @@ jobs:
           set -euo pipefail
 
           response_file="${RUNNER_TEMP}/streamlit-response.html"
-          http_status="$ (
+          http_status="$(
             curl \
               --location \
               --silent \
