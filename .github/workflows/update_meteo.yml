@@ -8,7 +8,9 @@ on:
   push:
     paths:
       - "update_meteo.py"
+      - "update_meteo_runtime.py"
       - "tests/test_update_meteo.py"
+      - "tests/test_update_meteo_runtime.py"
       - ".github/workflows/update_meteo.yml"
 
 permissions:
@@ -37,11 +39,15 @@ jobs:
       - name: Instalar dependencias meteorológicas
         run: python -m pip install --disable-pip-version-check pandas requests pytest
 
-      - name: Ejecutar pruebas de prioridad de fuentes
-        run: python -m pytest tests/test_update_meteo.py -q
+      - name: Ejecutar pruebas de prioridad y saneamiento
+        run: |
+          python -m pytest \
+            tests/test_update_meteo.py \
+            tests/test_update_meteo_runtime.py \
+            -q
 
       - name: Actualizar meteorología
-        run: python update_meteo.py
+        run: python update_meteo_runtime.py
 
       - name: Validar serie híbrida y copias multisitio
         shell: bash
