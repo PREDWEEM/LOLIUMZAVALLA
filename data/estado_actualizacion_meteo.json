@@ -86,7 +86,7 @@
     "zavalla": {
       "modo": "hibrido_observado_pronosticado",
       "archivo_destino": "data/meteo_sitios/zavalla.csv",
-      "archivo_raiz": "meteo_daily.csv",
+      "archivo_canonico": "data/meteo_sitios/zavalla.csv",
       "actualizado": "2026-08-02T13:35:32-03:00",
       "inicio": "2026-01-01",
       "fin": "2026-08-09",
