@@ -22,6 +22,7 @@ def test_repository_remains_multisite() -> None:
 def test_zavalla_remains_default_site_of_integrator() -> None:
     assert DEFAULT_SITE_SLUG == "zavalla"
     assert get_site(DEFAULT_SITE_SLUG).nombre == "Zavalla"
+    assert get_site(DEFAULT_SITE_SLUG).repositorio == "PREDWEEM/LOLIUM_ZAVALLA2026"
 
 
 def test_operational_model_policy_is_preserved() -> None:
