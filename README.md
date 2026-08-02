@@ -33,25 +33,32 @@ La única variable de ajuste disponible en la interfaz es:
 
 - **Cobertura de rastrojo (%)**.
 
-Wmax, exponente Kr, termoinhibición, latencia, umbrales de lluvia, decaimiento y lag operativo permanecen fijados por la calibración específica de cada localidad. Estos parámetros se utilizan internamente, pero no se muestran como controles de usuario.
+Wmax, exponente Kr, termoinhibición, latencia, umbrales de lluvia, decaimiento y lag operativo permanecen fijados por la calibración específica de cada localidad.
 
-## Sin recuentos de campo
+## Meteorología de Zavalla: estructura híbrida
 
-Se eliminaron del flujo operativo:
+Zavalla ya no utiliza ECMWF IFS como única fuente histórica. La actualización diaria aplica esta prioridad **por variable**:
 
-- formulario de inspección;
-- carga y restauración de conteos;
-- historial de plantas por metro cuadrado;
-- puntos de campo sobre la gráfica;
-- selección adaptativa mediante observaciones;
-- estado pendiente, provisional o confirmado basado en conteos;
-- exportación de inspecciones y estado del selector.
+1. **SMN WIS2 — Rosario Aero 87480:** observaciones SYNOP de temperatura y precipitación disponibles.
+2. **NOAA NCEI GSOD — estación 87480099999:** respaldo observado derivado de ISD.
+3. **Open-Meteo ECMWF IFS Archive:** completa únicamente los huecos que continúen sin observación.
+4. **Open-Meteo ECMWF IFS Forecast:** se utiliza desde el día actual y para los días futuros.
 
-Los archivos históricos de inspecciones pueden permanecer en el repositorio por compatibilidad, pero la aplicación no los lee ni los modifica.
+La serie conserva las columnas operativas:
 
-## Meteorología multisitio
+```text
+Fecha,TMAX,TMIN,Prec,Fuente,TipoDato,CalidadDato,Emision
+```
 
-Cada sitio utiliza una copia exacta de `meteo_daily.csv` proveniente de su repositorio geográfico público:
+y agrega trazabilidad independiente:
+
+```text
+Fuente_TMAX,Fuente_TMIN,Fuente_Prec
+```
+
+Por lo tanto, un mismo día puede combinar temperatura observada por SMN con precipitación respaldada por NOAA. Cuando ninguna fuente observada cubre una variable, esa variable queda identificada explícitamente como `OPEN_METEO_ECMWF_IFS_ARCHIVE_FALLBACK`.
+
+Los demás sitios continúan usando copias exactas de `meteo_daily.csv` provenientes de sus repositorios geográficos:
 
 ```text
 data/meteo_sitios/azul.csv
@@ -62,10 +69,41 @@ data/meteo_sitios/olavarria.csv
 data/meteo_sitios/pergamino.csv
 data/meteo_sitios/san-pedro.csv
 data/meteo_sitios/tres-arroyos.csv
-data/meteo_sitios/zavalla.csv
 ```
 
-`update_meteo.py` copia los archivos byte por byte, sin combinar fuentes, cambiar columnas ni volver a serializar el CSV. El workflow diario verifica tamaño y hash SHA-256 antes de guardar los cambios.
+La serie híbrida de Zavalla se guarda en:
+
+```text
+data/meteo_sitios/zavalla.csv
+meteo_daily.csv
+```
+
+## Actualización automática
+
+El workflow `.github/workflows/update_meteo.yml` se ejecuta:
+
+- diariamente a las 07:30 de Argentina;
+- manualmente mediante `workflow_dispatch`;
+- cuando cambia el código de actualización o sus pruebas.
+
+Antes de guardar datos, ejecuta pruebas de prioridad, valida continuidad diaria, valores nulos, coherencia `TMAX ≥ TMIN`, precipitación no negativa y presencia del pronóstico del día actual.
+
+Si SMN o NOAA están temporalmente indisponibles, el proceso continúa con las siguientes fuentes de la jerarquía y registra el diagnóstico en:
+
+```text
+data/estado_actualizacion_meteo.json
+```
+
+## Sin recuentos de campo
+
+Se eliminaron del flujo operativo:
+
+- formulario de inspección;
+- carga y restauración de conteos;
+- historial de plantas por metro cuadrado;
+- puntos de campo sobre la gráfica;
+- selección adaptativa mediante observaciones;
+- exportación de inspecciones y estado del selector.
 
 ## Reloj de grados-día fenológico
 
@@ -75,16 +113,6 @@ Los hitos son:
 
 - **600 °Cd:** inicio de la ventana de máxima susceptibilidad;
 - **800 °Cd:** límite operativo de la ventana fenológica.
-
-La interfaz muestra:
-
-- grados-día acumulados desde el pico;
-- estado fenológico actual;
-- grados-día restantes hasta 600 o 800 °Cd;
-- fechas previstas o alcanzadas para ambos hitos;
-- indicador gráfico de avance.
-
-La descarga Excel incluye una hoja `Reloj_Fenologico`.
 
 ## Resultados operativos
 
@@ -100,8 +128,6 @@ La tabla y la descarga Excel utilizan nombres únicos para el modelo seleccionad
 - `Modelo_Operativo`;
 - `Lag_Operativo_Dias`.
 
-Las columnas internas del modelo alternativo se eliminan de la tabla y de la exportación operativa.
-
 ## Ejecución
 
 ```bash
@@ -110,9 +136,10 @@ python update_meteo.py
 streamlit run app.py
 ```
 
-## Validación sintáctica
+## Pruebas y validación sintáctica
 
 ```bash
+python -m pytest tests/test_update_meteo.py -q
 python -m py_compile app.py predweem_core.py visualizacion_pulsos.py \
   update_meteo.py config_zavalla.py sitios_lolium.py
 ```
