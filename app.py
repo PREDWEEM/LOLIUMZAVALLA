@@ -1,4 +1,4 @@
-from app_detalle_1pct import run
+from app_fuente_hibrida import run
 
 
 if __name__ == "__main__":
