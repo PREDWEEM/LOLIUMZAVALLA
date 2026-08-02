@@ -7,6 +7,7 @@ controles de calidad y dirige la meteorología de Zavalla al archivo canónico
 ``data/meteo_sitios/zavalla.csv``; no genera una copia en la raíz.
 """
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -106,6 +107,18 @@ def install_runtime_corrections() -> None:
     globals()["LEGACY_OUTPUT"] = CANONICAL_ZAVALLA_OUTPUT
 
 
+def _normalize_multisite_state() -> None:
+    """Elimina metadatos de la antigua copia meteorológica raíz."""
+    if not core.STATE.is_file():
+        return
+    state = json.loads(core.STATE.read_text(encoding="utf-8"))
+    zavalla_state = state.get("sitios", {}).get("zavalla")
+    if isinstance(zavalla_state, dict):
+        zavalla_state.pop("archivo_raiz", None)
+        zavalla_state["archivo_canonico"] = CANONICAL_ZAVALLA_OUTPUT.as_posix()
+    core.atomic_json(state, core.STATE)
+
+
 # Las correcciones se instalan también al importar el módulo, para que las
 # pruebas y cualquier llamada externa usen la misma política que el CLI.
 install_runtime_corrections()
@@ -113,6 +126,7 @@ install_runtime_corrections()
 
 def main() -> None:
     core.main()
+    _normalize_multisite_state()
 
 
 if __name__ == "__main__":
