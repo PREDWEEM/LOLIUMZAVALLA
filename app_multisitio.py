@@ -9,7 +9,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from config_zavalla import CONFIG
+from config_multisitio import CONFIG
 from predweem_core import load_ann, phenology_window_dates, simulate_dual
 from sitios_lolium import DEFAULT_SITE_SLUG, SITES, get_site, ordered_sites
 from visualizacion_pulsos import construir_campanas_agrupadas
