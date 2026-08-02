@@ -1,22 +1,27 @@
-name: Copiar meteorología exacta multisitio LOLIUM
+name: Actualizar meteorología multisitio LOLIUM
 
 on:
   workflow_dispatch:
   schedule:
     # Todos los días a las 07:30 de Argentina (10:30 UTC).
-    - cron: '30 10 * * *'
+    - cron: "30 10 * * *"
+  push:
+    paths:
+      - "update_meteo.py"
+      - "tests/test_update_meteo.py"
+      - ".github/workflows/update_meteo.yml"
 
 permissions:
   contents: write
 
 concurrency:
-  group: copia-exacta-meteo-lolium-${{ github.ref }}
+  group: actualizacion-meteo-lolium-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   actualizar:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
 
     steps:
       - name: Descargar repositorio multisitio
@@ -27,20 +32,29 @@ jobs:
       - name: Configurar Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
-      - name: Instalar dependencia
-        run: python -m pip install requests
+      - name: Instalar dependencias meteorológicas
+        run: python -m pip install --disable-pip-version-check pandas requests pytest
 
-      - name: Copiar exactamente meteo_daily.csv públicos
+      - name: Ejecutar pruebas de prioridad de fuentes
+        run: python -m pytest tests/test_update_meteo.py -q
+
+      - name: Actualizar meteorología
         run: python update_meteo.py
 
-      - name: Verificar identidad byte por byte
+      - name: Validar serie híbrida y copias multisitio
+        shell: bash
         run: |
+          set -euo pipefail
           python - <<'PY'
           import hashlib
           import json
+          from datetime import datetime
           from pathlib import Path
+          from zoneinfo import ZoneInfo
+
+          import pandas as pd
 
           from sitios_lolium import DEFAULT_SITE_SLUG, ordered_sites
 
@@ -49,55 +63,119 @@ jobs:
               raise SystemExit("No se generó el estado de actualización.")
 
           state = json.loads(state_path.read_text(encoding="utf-8"))
-          if state.get("modo") != "COPIA_EXACTA_METEO_DAILY_PUBLICO":
-              raise SystemExit("La actualización no quedó en modo de copia exacta pública.")
-
-          for site in ordered_sites():
-              path = site.meteo_path(".")
-              if not path.is_file():
-                  raise SystemExit(f"No se generó {path}")
-
-              content = path.read_bytes()
-              digest = hashlib.sha256(content).hexdigest()
-              site_state = state.get("sitios", {}).get(site.slug, {})
-
-              if not site_state.get("copia_exacta"):
-                  raise SystemExit(f"{site.nombre}: copia exacta no confirmada.")
-              if digest != site_state.get("sha256"):
-                  raise SystemExit(f"{site.nombre}: el hash SHA-256 no coincide.")
-              if len(content) != int(site_state.get("bytes", -1)):
-                  raise SystemExit(f"{site.nombre}: el tamaño no coincide.")
-
-              print(site.nombre, path, len(content), digest)
-
-          default_site = next(
-              site for site in ordered_sites()
-              if site.slug == DEFAULT_SITE_SLUG
-          )
-          root_digest = hashlib.sha256(
-              Path("meteo_daily.csv").read_bytes()
-          ).hexdigest()
-          default_digest = hashlib.sha256(
-              default_site.meteo_path(".").read_bytes()
-          ).hexdigest()
-          if root_digest != default_digest:
+          expected_mode = "HIBRIDO_ZAVALLA_Y_COPIA_EXACTA_MULTISITIO"
+          if state.get("modo") != expected_mode:
               raise SystemExit(
-                  "meteo_daily.csv raíz no coincide exactamente con Zavalla."
+                  f"Modo inesperado: {state.get('modo')}; se esperaba {expected_mode}."
               )
+
+          sites = {site.slug: site for site in ordered_sites()}
+          for slug, site in sites.items():
+              path = site.meteo_path(".")
+              if not path.is_file() or path.stat().st_size <= 40:
+                  raise SystemExit(f"No se generó una serie válida para {site.nombre}.")
+
+              site_state = state.get("sitios", {}).get(slug, {})
+              if slug != DEFAULT_SITE_SLUG:
+                  content = path.read_bytes()
+                  digest = hashlib.sha256(content).hexdigest()
+                  if not site_state.get("copia_exacta"):
+                      raise SystemExit(f"{site.nombre}: copia exacta no confirmada.")
+                  if digest != site_state.get("sha256"):
+                      raise SystemExit(
+                          f"{site.nombre}: el hash SHA-256 no coincide."
+                      )
+
+          zavalla = sites[DEFAULT_SITE_SLUG]
+          hybrid_path = zavalla.meteo_path(".")
+          data = pd.read_csv(hybrid_path)
+          required = {
+              "Fecha", "TMAX", "TMIN", "Prec", "Fuente", "TipoDato",
+              "CalidadDato", "Emision", "Fuente_TMAX", "Fuente_TMIN",
+              "Fuente_Prec",
+          }
+          missing_columns = sorted(required.difference(data.columns))
+          if missing_columns:
+              raise SystemExit(
+                  "Faltan columnas de la serie híbrida: "
+                  + ", ".join(missing_columns)
+              )
+
+          data["Fecha"] = pd.to_datetime(data["Fecha"], errors="coerce")
+          for column in ("TMAX", "TMIN", "Prec"):
+              data[column] = pd.to_numeric(data[column], errors="coerce")
+
+          if data[list(required)].isna().any().any():
+              raise SystemExit("La serie híbrida contiene valores críticos nulos.")
+          if data["Fecha"].duplicated().any():
+              raise SystemExit("La serie híbrida contiene fechas duplicadas.")
+          if (data["TMAX"] < data["TMIN"]).any():
+              raise SystemExit("La serie híbrida contiene TMAX menor que TMIN.")
+          if (data["Prec"] < 0).any():
+              raise SystemExit("La serie híbrida contiene precipitación negativa.")
+
+          expected_dates = pd.date_range(
+              data["Fecha"].min(), data["Fecha"].max(), freq="D"
+          )
+          missing_dates = expected_dates.difference(pd.DatetimeIndex(data["Fecha"]))
+          if len(missing_dates):
+              raise SystemExit(
+                  "La serie híbrida tiene fechas faltantes: "
+                  + ", ".join(day.strftime("%Y-%m-%d") for day in missing_dates[:10])
+              )
+
+          today = pd.Timestamp(
+              datetime.now(ZoneInfo(zavalla.timezone)).date()
+          )
+          today_rows = data.loc[data["Fecha"] == today]
+          if today_rows.empty:
+              raise SystemExit("La serie híbrida no incluye el día actual.")
+          if not today_rows["Fuente"].str.contains(
+              "OPEN_METEO_ECMWF_IFS_FORECAST", regex=False
+          ).all():
+              raise SystemExit(
+                  "El día actual no está identificado como pronóstico ECMWF IFS."
+              )
+
+          observed_mask = (
+              data["Fuente"].str.contains("SMN_WIS2", regex=False)
+              | data["Fuente"].str.contains("NOAA_NCEI_GSOD", regex=False)
+          )
+          if not observed_mask.any():
+              print(
+                  "::warning title=Fuentes observadas no disponibles::"
+                  "La actualización se completó con ECMWF porque SMN y NOAA "
+                  "no devolvieron observaciones utilizables."
+              )
+          else:
+              print(
+                  "Días con al menos una variable observada:",
+                  int(observed_mask.sum()),
+              )
+
+          root = Path("meteo_daily.csv")
+          if root.read_bytes() != hybrid_path.read_bytes():
+              raise SystemExit(
+                  "meteo_daily.csv raíz no coincide con Zavalla híbrido."
+              )
+
+          print(data.groupby(["Fuente", "TipoDato"]).size().to_string())
           PY
 
       - name: Guardar actualización diaria
+        shell: bash
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add meteo_daily.csv data/meteo_sitios data/estado_actualizacion_meteo.json
 
           if git diff --cached --quiet; then
-            echo "Los archivos originales no cambiaron."
+            echo "La meteorología no cambió."
             exit 0
           fi
 
-          git commit -m "Copia exacta diaria de meteo_daily multisitio"
+          git commit -m "Actualiza meteorología híbrida de Zavalla"
           git pull --rebase origin "${GITHUB_REF_NAME}"
           git push origin "HEAD:${GITHUB_REF_NAME}"
