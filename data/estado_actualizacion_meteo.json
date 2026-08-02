@@ -1,5 +1,5 @@
 {
-  "actualizado_en": "2026-08-01T08:39:10-03:00",
+  "actualizado_en": "2026-08-02T08:39:58-03:00",
   "modo": "COPIA_EXACTA_METEO_DAILY_PUBLICO",
   "descripcion": "Cada archivo de data/meteo_sitios es una copia byte por byte del meteo_daily.csv público de su repositorio geográfico.",
   "sitios": {
@@ -10,8 +10,8 @@
       "url_origen": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_AZUL2026/main/meteo_daily.csv",
       "url_solicitada": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_AZUL2026/main/meteo_daily.csv",
       "archivo_destino": "data/meteo_sitios/azul.csv",
-      "bytes": 16603,
-      "sha256": "a9dfbbe2e357c7bd29fcc57c440001f909f1bcd383106895db4269013be81bba",
+      "bytes": 16677,
+      "sha256": "76a6b38f1a61fa2d860bb211c5542177966849c0bd4f349ee61a04982a660937",
       "copia_exacta": true,
       "repositorio_publico": true
     },
@@ -22,8 +22,8 @@
       "url_origen": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_BAL2026/main/meteo_daily.csv",
       "url_solicitada": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_BAL2026/main/meteo_daily.csv",
       "archivo_destino": "data/meteo_sitios/balcarce.csv",
-      "bytes": 32674,
-      "sha256": "f9d835371309c501afdb8a3b244ff0815b3538f5c2822cfc4778057aa714beb9",
+      "bytes": 33066,
+      "sha256": "3f73726887073f2d573c841a92dfeea450ae857a3945089aa628ecce60eab09f",
       "copia_exacta": true,
       "repositorio_publico": true
     },
@@ -34,8 +34,8 @@
       "url_origen": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_BOR2026/main/meteo_daily.csv",
       "url_solicitada": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_BOR2026/main/meteo_daily.csv",
       "archivo_destino": "data/meteo_sitios/bordenave.csv",
-      "bytes": 32930,
-      "sha256": "32da9c47ab1495f769a597cf2e719f4cf69f449c343082f5fb34b5b1332e88cf",
+      "bytes": 34645,
+      "sha256": "f03c3f1f4e65482da0ccc74f890164656f50401df5ad79573f50c9ce79103be2",
       "copia_exacta": true,
       "repositorio_publico": true
     },
@@ -46,8 +46,8 @@
       "url_origen": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_LARTIGAU-2026/main/meteo_daily.csv",
       "url_solicitada": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_LARTIGAU-2026/main/meteo_daily.csv",
       "archivo_destino": "data/meteo_sitios/lartigau.csv",
-      "bytes": 36034,
-      "sha256": "448cb5c18e28153438b52b9d423f7571d9e533a1aca56e28e16a009e51f1b62b",
+      "bytes": 36201,
+      "sha256": "c69689a648473ff64d46aa1a1cdb13515c6d1a9121215fe3eb8b71667d77305a",
       "copia_exacta": true,
       "repositorio_publico": true
     },
@@ -58,8 +58,8 @@
       "url_origen": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_OLAVA2026/main/meteo_daily.csv",
       "url_solicitada": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_OLAVA2026/main/meteo_daily.csv",
       "archivo_destino": "data/meteo_sitios/olavarria.csv",
-      "bytes": 16603,
-      "sha256": "2d5851720c4b3bb6beb38c5afafac180dab9ec861f0fdfb52238ee5727040ddb",
+      "bytes": 16678,
+      "sha256": "dc4ec3b7197031ccff4339769d21d9295a1988a96aad30bf1557ff854617a30a",
       "copia_exacta": true,
       "repositorio_publico": true
     },
@@ -70,8 +70,8 @@
       "url_origen": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM-PERGA2026/main/meteo_daily.csv",
       "url_solicitada": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM-PERGA2026/main/meteo_daily.csv",
       "archivo_destino": "data/meteo_sitios/pergamino.csv",
-      "bytes": 32910,
-      "sha256": "73c650659fb2c6604977b9e707ee08e94e38461f348db0b3c82d8d04de35499d",
+      "bytes": 33104,
+      "sha256": "f878284f7dd0fd2327c2affd63e9852d247d3ad4a20bf5735fbfe784a394ba1a",
       "copia_exacta": true,
       "repositorio_publico": true
     },
@@ -82,8 +82,8 @@
       "url_origen": "https://raw.githubusercontent.com/PREDWEEM/lolium_sanpedro2026/main/meteo_daily.csv",
       "url_solicitada": "https://raw.githubusercontent.com/PREDWEEM/lolium_sanpedro2026/main/meteo_daily.csv",
       "archivo_destino": "data/meteo_sitios/san-pedro.csv",
-      "bytes": 34684,
-      "sha256": "aae8f5ab00ad04698f8b15e5b1a1d0f01aabae35895765f424a4fa7303e2b149",
+      "bytes": 34871,
+      "sha256": "6af5176da9a793add2423e7b931a14250f65045c9f22202aa5cccecfd7e45454",
       "copia_exacta": true,
       "repositorio_publico": true
     },
@@ -94,8 +94,8 @@
       "url_origen": "https://raw.githubusercontent.com/PREDWEEM/loliumTA_2026/main/meteo_daily.csv",
       "url_solicitada": "https://raw.githubusercontent.com/PREDWEEM/loliumTA_2026/main/meteo_daily.csv",
       "archivo_destino": "data/meteo_sitios/tres-arroyos.csv",
-      "bytes": 34691,
-      "sha256": "5950cfa7061caab473f595198ceda9550bd958228f0ae0e62a5fb44839d28be6",
+      "bytes": 34780,
+      "sha256": "6f4694fc65cc39eded6be3391d91d1c143f16c57e156ffc739d068e9aa460c17",
       "copia_exacta": true,
       "repositorio_publico": true
     },
