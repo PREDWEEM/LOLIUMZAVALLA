@@ -8,6 +8,7 @@ on:
   push:
     paths:
       - "update_meteo.py"
+      - "update_meteo_core.py"
       - "update_meteo_runtime.py"
       - "tests/test_update_meteo.py"
       - "tests/test_update_meteo_runtime.py"
@@ -47,7 +48,7 @@ jobs:
             -q
 
       - name: Actualizar meteorología
-        run: python update_meteo_runtime.py
+        run: python update_meteo.py
 
       - name: Validar serie híbrida y copias multisitio
         shell: bash
