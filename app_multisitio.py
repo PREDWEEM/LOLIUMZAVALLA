@@ -15,7 +15,6 @@ from sitios_lolium import DEFAULT_SITE_SLUG, SITES, get_site, ordered_sites
 from visualizacion_pulsos import construir_campanas_agrupadas
 
 BASE = Path(__file__).resolve().parent
-LEGACY_METEO_PATH = BASE / "meteo_daily.csv"
 LOG_OFFSET = 0.01
 LOG_Y_RANGE = [-2.18, 0.12]
 LOG_Y_TICKS = [-2.0, -1.5, -1.0, -0.5, 0.0]
@@ -41,9 +40,7 @@ def resolve_weather(site, uploaded):
         return read_table(uploaded), "Archivo meteorológico cargado por el usuario"
     path = site.meteo_path(BASE)
     if path.is_file() and path.stat().st_size > 40:
-        return pd.read_csv(path), f"Copia exacta del repositorio: {path.relative_to(BASE)}"
-    if site.slug == DEFAULT_SITE_SLUG and LEGACY_METEO_PATH.is_file() and LEGACY_METEO_PATH.stat().st_size > 40:
-        return pd.read_csv(LEGACY_METEO_PATH), "Copia exacta heredada: meteo_daily.csv"
+        return pd.read_csv(path), f"Serie multisitio: {path.relative_to(BASE)}"
     return None, "Sin serie meteorológica disponible"
 
 
