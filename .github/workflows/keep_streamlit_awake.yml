@@ -3,7 +3,7 @@ name: Mantener Streamlit disponible
 on:
   schedule:
     # Streamlit Community Cloud hiberna las apps sin tráfico durante 12 horas.
-    # Se usa el minuto 17 para evitar la congestión al comienzo de cada hora.
+    # Se ejecuta cada 6 horas y en un minuto no redondo para reducir congestión.
     - cron: "17 */6 * * *"
   workflow_dispatch:
 
@@ -16,81 +16,40 @@ concurrency:
 
 jobs:
   visit-streamlit-app:
-    name: Comprobar aplicación PREDWEEM
+    name: Abrir aplicación PREDWEEM con Chromium
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 12
 
     steps:
-      - name: Generar tráfico y comprobar Streamlit
-        env:
-          APP_ORIGIN: "https://f8d5dqg4evu9tvthrrffkl.streamlit.app"
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar Playwright y Chromium
         shell: bash
         run: |
           set -euo pipefail
+          python -m pip install --disable-pip-version-check playwright
+          python -m playwright install --with-deps chromium
 
-          health_url="${APP_ORIGIN}/_stcore/health"
-          response_file="${RUNNER_TEMP}/streamlit-health.txt"
-          headers_file="${RUNNER_TEMP}/streamlit-headers.txt"
+      - name: Abrir Streamlit y mantener la sesión activa
+        env:
+          APP_URL: "https://f8d5dqg4evu9tvthrrffkl.streamlit.app/"
+          KEEPALIVE_ARTIFACT_DIR: "keepalive-artifacts"
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/keep_streamlit_awake.py
 
-          for attempt in 1 2 3 4 5; do
-            echo "Comprobación ${attempt}/5: ${health_url}"
-
-            http_status="$(
-              curl \
-                --silent \
-                --show-error \
-                --dump-header "${headers_file}" \
-                --output "${response_file}" \
-                --write-out "%{http_code}" \
-                --connect-timeout 20 \
-                --max-time 60 \
-                --retry 1 \
-                --retry-delay 5 \
-                --retry-all-errors \
-                --header "Accept: text/plain,*/*;q=0.1" \
-                --user-agent "PREDWEEM-availability-check/3.0" \
-                "${health_url}" \
-              || true
-            )"
-
-            echo "Código HTTP de salud: ${http_status:-sin respuesta}"
-
-            if [[ "${http_status}" == "200" ]]; then
-              echo "Respuesta del endpoint:"
-              cat "${response_file}" || true
-              echo
-              echo "La aplicación está disponible."
-              exit 0
-            fi
-
-            location="$(
-              awk 'BEGIN {IGNORECASE=1} /^location:/ {sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); print; exit}' \
-                "${headers_file}" \
-              || true
-            )"
-
-            if [[ "${http_status}" == "303" && "${location}" == *"share.streamlit.io/-/auth/app"* ]]; then
-              echo "::error title=Aplicación privada::Streamlit redirige el endpoint de salud al inicio de sesión. GitHub Actions no puede mantener activa una app privada sin una sesión interactiva."
-              echo "Redirección recibida: ${location}"
-              echo
-              echo "Para habilitar este control:"
-              echo "1. Abra la aplicación en Streamlit Community Cloud."
-              echo "2. Ingrese a App settings > Sharing."
-              echo "3. Seleccione 'This app is public and searchable'."
-              echo "4. Ejecute nuevamente este workflow con 'Run workflow'."
-              exit 2
-            fi
-
-            if [[ "${attempt}" -lt 5 ]]; then
-              echo "Streamlit todavía no está disponible; nuevo intento en 20 segundos."
-              sleep 20
-            fi
-          done
-
-          echo "La aplicación no devolvió HTTP 200 en ${health_url}."
-          if [[ -s "${response_file}" ]]; then
-            echo "Última respuesta recibida:"
-            head -c 1000 "${response_file}" || true
-            echo
-          fi
-          exit 1
+      - name: Guardar diagnóstico del navegador
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamlit-keepalive-${{ github.run_id }}
+          path: keepalive-artifacts/
+          if-no-files-found: warn
+          retention-days: 7
