@@ -72,17 +72,18 @@ SMN Rosario Aero 87480
 → Open-Meteo ECMWF IFS Forecast desde el día actual
 ```
 
-Las columnas `Fuente_TMAX`, `Fuente_TMIN` y `Fuente_Prec` registran la procedencia efectiva.
+Las columnas `Fuente_TMAX`, `Fuente_TMIN` y `Fuente_Prec` registran la procedencia efectiva. Todas las series se almacenan únicamente en `data/meteo_sitios/`; la antigua copia raíz `meteo_daily.csv` fue eliminada.
 
 ## Componentes eliminados
 
-La plataforma no selecciona modelos mediante conteos de campo. Por ese motivo no deben existir en `main`:
+La plataforma no selecciona modelos mediante conteos de campo y no mantiene archivos propios de una única localidad en la raíz. Por ese motivo no deben existir en `main`:
 
 ```text
 selector_adaptativo.py
 data/inspecciones_campo.csv
 data/selector_estado.json
 config_zavalla.py
+meteo_daily.csv
 ```
 
 La ausencia de estos archivos y la presencia de las nueve localidades se controlan en `tests/test_multisitio_registry.py`.
