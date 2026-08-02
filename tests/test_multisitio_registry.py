@@ -1,3 +1,6 @@
+from pathlib import Path
+
+from config_multisitio import CONFIG, SITE_CALIBRATIONS, MultisiteConfig
 from sitios_lolium import DEFAULT_SITE_SLUG, SITES, get_site, ordered_sites
 
 
@@ -13,10 +16,19 @@ EXPECTED_SITE_SLUGS = {
     "zavalla",
 }
 
+OBSOLETE_PATHS = (
+    "config_zavalla.py",
+    "selector_adaptativo.py",
+    "data/inspecciones_campo.csv",
+    "data/selector_estado.json",
+)
+
 
 def test_repository_remains_multisite() -> None:
     assert set(SITES) == EXPECTED_SITE_SLUGS
     assert len(ordered_sites()) == len(EXPECTED_SITE_SLUGS)
+    assert set(SITE_CALIBRATIONS) == EXPECTED_SITE_SLUGS
+    assert isinstance(CONFIG, MultisiteConfig)
 
 
 def test_zavalla_remains_default_site_of_integrator() -> None:
@@ -36,3 +48,8 @@ def test_operational_model_policy_is_preserved() -> None:
         site = get_site(slug)
         assert site.modelo_operativo == "sin_lag"
         assert site.lag_operativo_dias == 0
+
+
+def test_obsolete_single_site_artifacts_are_absent() -> None:
+    for raw_path in OBSOLETE_PATHS:
+        assert not Path(raw_path).exists(), f"Archivo obsoleto presente: {raw_path}"
