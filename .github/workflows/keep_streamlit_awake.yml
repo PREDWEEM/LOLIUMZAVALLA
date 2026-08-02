@@ -18,7 +18,7 @@ jobs:
   visit-streamlit-app:
     name: Abrir aplicación PREDWEEM con Chromium
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
 
     steps:
       - name: Descargar repositorio
