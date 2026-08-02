@@ -28,27 +28,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          app_url="${APP_ORIGIN}/"
           health_url="${APP_ORIGIN}/_stcore/health"
           response_file="${RUNNER_TEMP}/streamlit-health.txt"
-
-          echo "Generando una visita inicial sin seguir redirecciones..."
-          initial_status="$(
-            curl \
-              --silent \
-              --show-error \
-              --output /dev/null \
-              --write-out "%{http_code}" \
-              --connect-timeout 20 \
-              --max-time 40 \
-              --retry 1 \
-              --retry-delay 5 \
-              --retry-all-errors \
-              --user-agent "Mozilla/5.0 PREDWEEM-availability-check/2.0" \
-              "${app_url}" \
-            || true
-          )"
-          echo "Código inicial: ${initial_status:-sin respuesta}"
+          headers_file="${RUNNER_TEMP}/streamlit-headers.txt"
 
           for attempt in 1 2 3 4 5; do
             echo "Comprobación ${attempt}/5: ${health_url}"
@@ -57,6 +39,7 @@ jobs:
               curl \
                 --silent \
                 --show-error \
+                --dump-header "${headers_file}" \
                 --output "${response_file}" \
                 --write-out "%{http_code}" \
                 --connect-timeout 20 \
@@ -65,7 +48,7 @@ jobs:
                 --retry-delay 5 \
                 --retry-all-errors \
                 --header "Accept: text/plain,*/*;q=0.1" \
-                --user-agent "PREDWEEM-availability-check/2.0" \
+                --user-agent "PREDWEEM-availability-check/3.0" \
                 "${health_url}" \
               || true
             )"
@@ -78,6 +61,24 @@ jobs:
               echo
               echo "La aplicación está disponible."
               exit 0
+            fi
+
+            location="$(
+              awk 'BEGIN {IGNORECASE=1} /^location:/ {sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); print; exit}' \
+                "${headers_file}" \
+              || true
+            )"
+
+            if [[ "${http_status}" == "303" && "${location}" == *"share.streamlit.io/-/auth/app"* ]]; then
+              echo "::error title=Aplicación privada::Streamlit redirige el endpoint de salud al inicio de sesión. GitHub Actions no puede mantener activa una app privada sin una sesión interactiva."
+              echo "Redirección recibida: ${location}"
+              echo
+              echo "Para habilitar este control:"
+              echo "1. Abra la aplicación en Streamlit Community Cloud."
+              echo "2. Ingrese a App settings > Sharing."
+              echo "3. Seleccione 'This app is public and searchable'."
+              echo "4. Ejecute nuevamente este workflow con 'Run workflow'."
+              exit 2
             fi
 
             if [[ "${attempt}" -lt 5 ]]; then
