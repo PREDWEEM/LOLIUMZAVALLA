@@ -1,18 +1,20 @@
 from __future__ import annotations
 
-"""Actualizador meteorológico público y seguro para PREDWEEM Zavalla.
+"""Actualizador meteorológico seguro para la plataforma PREDWEEM multisitio.
 
-El motor histórico se conserva en ``update_meteo_core.py``. Este módulo aplica
-los controles de calidad antes de ejecutar la actualización para que tanto
-``python update_meteo.py`` como los workflows programados utilicen exactamente
-la misma lógica.
+El motor se conserva en ``update_meteo_core.py``. Este módulo instala los
+controles de calidad y dirige la meteorología de Zavalla al archivo canónico
+``data/meteo_sitios/zavalla.csv``; no genera una copia en la raíz.
 """
 
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
 import update_meteo_core as core
+
+CANONICAL_ZAVALLA_OUTPUT = Path("data/meteo_sitios/zavalla.csv")
 
 # Reexporta la interfaz pública existente para conservar compatibilidad con
 # pruebas y módulos que importan constantes o funciones desde update_meteo.
@@ -96,10 +98,12 @@ def merge_observed_priority_history(
 
 
 def install_runtime_corrections() -> None:
-    """Instala los controles en el módulo donde se ejecutan las funciones."""
+    """Instala controles y la ruta canónica en el motor meteorológico."""
     core._precipitation_mm = _safe_precipitation_mm
     core.fetch_smn_rosario_daily = fetch_smn_rosario_daily
     core.merge_observed_priority_history = merge_observed_priority_history
+    core.LEGACY_OUTPUT = CANONICAL_ZAVALLA_OUTPUT
+    globals()["LEGACY_OUTPUT"] = CANONICAL_ZAVALLA_OUTPUT
 
 
 # Las correcciones se instalan también al importar el módulo, para que las
