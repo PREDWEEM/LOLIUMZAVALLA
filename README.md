@@ -33,66 +33,7 @@ La única variable de ajuste disponible en la interfaz es:
 
 - **Cobertura de rastrojo (%)**.
 
-Wmax, exponente Kr, termoinhibición, latencia, umbrales de lluvia, decaimiento y lag operativo permanecen fijados por la calibración específica de cada localidad.
-
-## Meteorología de Zavalla: estructura híbrida
-
-Zavalla ya no utiliza ECMWF IFS como única fuente histórica. La actualización diaria aplica esta prioridad **por variable**:
-
-1. **SMN WIS2 — Rosario Aero 87480:** observaciones SYNOP de temperatura y precipitación disponibles.
-2. **NOAA NCEI GSOD — estación 87480099999:** respaldo observado derivado de ISD.
-3. **Open-Meteo ECMWF IFS Archive:** completa únicamente los huecos que continúen sin observación.
-4. **Open-Meteo ECMWF IFS Forecast:** se utiliza desde el día actual y para los días futuros.
-
-La serie conserva las columnas operativas:
-
-```text
-Fecha,TMAX,TMIN,Prec,Fuente,TipoDato,CalidadDato,Emision
-```
-
-y agrega trazabilidad independiente:
-
-```text
-Fuente_TMAX,Fuente_TMIN,Fuente_Prec
-```
-
-Por lo tanto, un mismo día puede combinar temperatura observada por SMN con precipitación respaldada por NOAA. Cuando ninguna fuente observada cubre una variable, esa variable queda identificada explícitamente como `OPEN_METEO_ECMWF_IFS_ARCHIVE_FALLBACK`.
-
-Los demás sitios continúan usando copias exactas de `meteo_daily.csv` provenientes de sus repositorios geográficos:
-
-```text
-data/meteo_sitios/azul.csv
-data/meteo_sitios/balcarce.csv
-data/meteo_sitios/bordenave.csv
-data/meteo_sitios/lartigau.csv
-data/meteo_sitios/olavarria.csv
-data/meteo_sitios/pergamino.csv
-data/meteo_sitios/san-pedro.csv
-data/meteo_sitios/tres-arroyos.csv
-```
-
-La serie híbrida de Zavalla se guarda en:
-
-```text
-data/meteo_sitios/zavalla.csv
-meteo_daily.csv
-```
-
-## Actualización automática
-
-El workflow `.github/workflows/update_meteo.yml` se ejecuta:
-
-- diariamente a las 07:30 de Argentina;
-- manualmente mediante `workflow_dispatch`;
-- cuando cambia el código de actualización o sus pruebas.
-
-Antes de guardar datos, ejecuta pruebas de prioridad, valida continuidad diaria, valores nulos, coherencia `TMAX ≥ TMIN`, precipitación no negativa y presencia del pronóstico del día actual.
-
-Si SMN o NOAA están temporalmente indisponibles, el proceso continúa con las siguientes fuentes de la jerarquía y registra el diagnóstico en:
-
-```text
-data/estado_actualizacion_meteo.json
-```
+Wmax, exponente Kr, termoinhibición, latencia, umbrales de lluvia, decaimiento y lag operativo permanecen fijados por la calibración específica de cada localidad. Estos parámetros se utilizan internamente, pero no se muestran como controles de usuario.
 
 ## Sin recuentos de campo
 
@@ -103,7 +44,29 @@ Se eliminaron del flujo operativo:
 - historial de plantas por metro cuadrado;
 - puntos de campo sobre la gráfica;
 - selección adaptativa mediante observaciones;
+- estado pendiente, provisional o confirmado basado en conteos;
 - exportación de inspecciones y estado del selector.
+
+Los archivos históricos de inspecciones pueden permanecer en el repositorio por compatibilidad, pero la aplicación no los lee ni los modifica.
+
+## Meteorología multisitio
+
+Los sitios distintos de Zavalla conservan copias exactas de `meteo_daily.csv` provenientes de sus repositorios geográficos.
+
+Para Zavalla, la prioridad por variable es:
+
+1. SMN Rosario Aero 87480;
+2. NOAA NCEI como respaldo observado, cuando esté disponible;
+3. Open-Meteo ECMWF IFS Archive para completar faltantes;
+4. Open-Meteo ECMWF IFS Forecast desde el día actual.
+
+El comando operativo único es:
+
+```bash
+python update_meteo.py
+```
+
+Ese comando descarta códigos negativos de precipitación observada y permite que la fuente siguiente complete el dato.
 
 ## Reloj de grados-día fenológico
 
@@ -114,34 +77,12 @@ Los hitos son:
 - **600 °Cd:** inicio de la ventana de máxima susceptibilidad;
 - **800 °Cd:** límite operativo de la ventana fenológica.
 
-## Resultados operativos
-
-La tabla y la descarga Excel utilizan nombres únicos para el modelo seleccionado:
-
-- `EMERREL`;
-- `EMERAC`;
-- `TT_DESDE_PICO`;
-- `Termoinhibida_Operativa`;
-- `Umbral_Termoinhibicion_Operativo_C`;
-- `FACTOR_DECAIMIENTO_OPERATIVO`;
-- `DIAS_DESDE_PICO_OPERATIVO`;
-- `Modelo_Operativo`;
-- `Lag_Operativo_Dias`.
-
 ## Ejecución
 
 ```bash
 python -m pip install -r requirements.txt
 python update_meteo.py
 streamlit run app.py
-```
-
-## Pruebas y validación sintáctica
-
-```bash
-python -m pytest tests/test_update_meteo.py -q
-python -m py_compile app.py predweem_core.py visualizacion_pulsos.py \
-  update_meteo.py config_zavalla.py sitios_lolium.py
 ```
 
 ## Autoría
