@@ -197,7 +197,7 @@ SITE_CALIBRATIONS: dict[str, SiteCalibration] = {
         techo_choque_hidrico=0.75,
         umbral_primer_pico=0.20,
         lag_candidato_dias=15,
-        repositorio_referencia="PREDWEEM/LOLIUMZAVALLA",
+        repositorio_referencia="PREDWEEM/LOLIUM_ZAVALLA2026",
         archivo_motor_referencia="predweem_core.py",
     ),
 }
