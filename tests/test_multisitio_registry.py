@@ -21,6 +21,7 @@ OBSOLETE_PATHS = (
     "selector_adaptativo.py",
     "data/inspecciones_campo.csv",
     "data/selector_estado.json",
+    "meteo_daily.csv",
 )
 
 
@@ -35,6 +36,9 @@ def test_zavalla_remains_default_site_of_integrator() -> None:
     assert DEFAULT_SITE_SLUG == "zavalla"
     assert get_site(DEFAULT_SITE_SLUG).nombre == "Zavalla"
     assert get_site(DEFAULT_SITE_SLUG).repositorio == "PREDWEEM/LOLIUM_ZAVALLA2026"
+    assert get_site(DEFAULT_SITE_SLUG).meteo_path() == Path(
+        "data/meteo_sitios/zavalla.csv"
+    )
 
 
 def test_operational_model_policy_is_preserved() -> None:
