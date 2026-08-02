@@ -7,7 +7,7 @@ from typing import Iterable
 import numpy as np
 import pandas as pd
 
-from config_zavalla import CONFIG, ZavallaConfig
+from config_multisitio import CONFIG, MultisiteConfig
 
 
 REQUIRED_MODEL_FILES = ("IW.npy", "bias_IW.npy", "LW.npy", "bias_out.npy")
@@ -321,7 +321,7 @@ def simulate_dual(
     wmax: float,
     lag_days: int,
     kr_exponent: float = 0.0,
-    config: ZavallaConfig = CONFIG,
+    config: MultisiteConfig = CONFIG,
 ) -> SimulationResult:
     data = canonicalize_weather(raw_weather)
     data["Julian_days"] = data["Fecha"].dt.dayofyear
