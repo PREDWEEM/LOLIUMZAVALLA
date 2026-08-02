@@ -5,31 +5,43 @@ from datetime import date
 import pandas as pd
 import pytest
 
-import update_meteo
-from sitios_lolium import SITES, get_site
+from sitios_lolium import SITES
 from update_meteo import (
+    ARCHIVE_SOURCE,
     COLUMNS,
-    FALLBACK_SOURCE,
     FORECAST_PAST_DAYS,
-    build_historical_block,
-    canonicalize_repository_history,
+    FORECAST_SOURCE,
+    NOAA_SOURCE,
+    SMN_SOURCE,
     combine_historical_and_forecast,
-    merge_repository_priority_history,
+    merge_observed_priority_history,
 )
 
 
-def weather_frame(start: str, periods: int, source: str) -> pd.DataFrame:
+def weather_frame(
+    start: str,
+    periods: int,
+    source: str,
+    *,
+    tmax: float | None = 18.0,
+    tmin: float | None = 8.0,
+    prec: float | None = 0.0,
+    data_type: str = "Observado",
+) -> pd.DataFrame:
     dates = pd.date_range(start, periods=periods, freq="D")
     frame = pd.DataFrame(
         {
             "Fecha": dates,
-            "TMAX": [18.0] * periods,
-            "TMIN": [8.0] * periods,
-            "Prec": [0.0] * periods,
+            "TMAX": [tmax] * periods,
+            "TMIN": [tmin] * periods,
+            "Prec": [prec] * periods,
             "Fuente": [source] * periods,
-            "TipoDato": [source] * periods,
-            "CalidadDato": [source] * periods,
-            "Emision": ["2026-07-30T23:57:00-03:00"] * periods,
+            "TipoDato": [data_type] * periods,
+            "CalidadDato": [data_type] * periods,
+            "Emision": ["2026-08-02T12:00:00-03:00"] * periods,
+            "Fuente_TMAX": [source] * periods,
+            "Fuente_TMIN": [source] * periods,
+            "Fuente_Prec": [source] * periods,
         }
     )
     return frame[COLUMNS]
@@ -39,19 +51,111 @@ def test_past_days_is_enabled_for_the_forecast_bridge():
     assert FORECAST_PAST_DAYS >= 1
 
 
-def test_all_sites_point_to_their_repository_meteo_daily():
+def test_all_sites_keep_meteo_daily_as_operational_filename():
     assert len(SITES) == 9
-    for site in SITES.values():
-        assert site.archivo_meteo == "meteo_daily.csv"
-        assert site.raw_meteo_url == (
-            f"https://raw.githubusercontent.com/{site.repositorio}/"
-            f"{site.rama_meteo}/meteo_daily.csv"
+    assert all(site.archivo_meteo == "meteo_daily.csv" for site in SITES.values())
+
+
+def test_smn_has_priority_when_all_variables_are_observed():
+    smn = weather_frame("2026-01-01", 2, SMN_SOURCE)
+    noaa = weather_frame("2026-01-01", 2, NOAA_SOURCE, tmax=25.0)
+    archive = weather_frame("2026-01-01", 2, ARCHIVE_SOURCE, tmax=30.0)
+
+    merged = merge_observed_priority_history(
+        smn,
+        noaa,
+        archive,
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 2),
+        emission="2026-08-02T12:00:00-03:00",
+    )
+
+    assert (merged["Fuente"] == SMN_SOURCE).all()
+    assert (merged["TMAX"] == 18.0).all()
+    assert (merged["TipoDato"] == "Observado").all()
+
+
+def test_noaa_completes_missing_smn_precipitation_per_variable():
+    smn = weather_frame("2026-01-01", 1, SMN_SOURCE, prec=None)
+    noaa = weather_frame("2026-01-01", 1, NOAA_SOURCE, prec=12.4)
+    archive = weather_frame("2026-01-01", 1, ARCHIVE_SOURCE, prec=20.0)
+
+    merged = merge_observed_priority_history(
+        smn,
+        noaa,
+        archive,
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 1),
+        emission="2026-08-02T12:00:00-03:00",
+    )
+    row = merged.iloc[0]
+
+    assert row["TMAX"] == 18.0
+    assert row["TMIN"] == 8.0
+    assert row["Prec"] == 12.4
+    assert row["Fuente_TMAX"] == SMN_SOURCE
+    assert row["Fuente_Prec"] == NOAA_SOURCE
+    assert row["TipoDato"] == "Observado_compuesto"
+    assert row["CalidadDato"] == "Observado_SMN_con_respaldo_NOAA"
+
+
+def test_open_meteo_archive_fills_days_absent_from_observed_sources():
+    smn = weather_frame("2026-01-01", 1, SMN_SOURCE)
+    noaa = weather_frame("2026-01-01", 1, NOAA_SOURCE)
+    archive = weather_frame(
+        "2026-01-01",
+        3,
+        ARCHIVE_SOURCE,
+        tmax=27.0,
+        data_type="Provisional",
+    )
+
+    merged = merge_observed_priority_history(
+        smn,
+        noaa,
+        archive,
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 3),
+        emission="2026-08-02T12:00:00-03:00",
+    )
+
+    fallback = merged.loc[
+        merged["Fecha"] == pd.Timestamp("2026-01-02")
+    ].iloc[0]
+    assert fallback["Fuente"] == ARCHIVE_SOURCE
+    assert fallback["TMAX"] == 27.0
+    assert fallback["TipoDato"] == "Provisional"
+    assert fallback["CalidadDato"] == "Provisional_hueco_observaciones"
+
+
+def test_merge_fails_when_all_three_sources_leave_a_critical_gap():
+    smn = weather_frame("2026-01-01", 1, SMN_SOURCE, prec=None)
+    noaa = weather_frame("2026-01-01", 1, NOAA_SOURCE, prec=None)
+    archive = weather_frame("2026-01-01", 1, ARCHIVE_SOURCE, prec=None)
+
+    with pytest.raises(RuntimeError, match="No fue posible completar"):
+        merge_observed_priority_history(
+            smn,
+            noaa,
+            archive,
+            start_date=date(2026, 1, 1),
+            end_date=date(2026, 1, 1),
+            emission="2026-08-02T12:00:00-03:00",
         )
 
 
-def test_recent_forecast_closes_gap_after_historical_block():
-    historical = weather_frame("2026-07-27", 3, "archive")
-    forecast = weather_frame("2026-07-29", 5, "forecast")
+def test_forecast_replaces_today_but_not_yesterday():
+    historical = weather_frame(
+        "2026-07-27",
+        4,
+        SMN_SOURCE,
+    )
+    forecast = weather_frame(
+        "2026-07-29",
+        5,
+        FORECAST_SOURCE,
+        data_type="Pronostico",
+    )
 
     combined = combine_historical_and_forecast(
         historical,
@@ -59,167 +163,23 @@ def test_recent_forecast_closes_gap_after_historical_block():
         date(2026, 7, 30),
     )
 
-    assert combined["Fecha"].dt.strftime("%Y-%m-%d").tolist() == [
-        "2026-07-27",
-        "2026-07-28",
-        "2026-07-29",
-        "2026-07-30",
-        "2026-07-31",
-        "2026-08-01",
-        "2026-08-02",
-    ]
-    current_row = combined.loc[
+    yesterday = combined.loc[
+        combined["Fecha"] == pd.Timestamp("2026-07-29")
+    ].iloc[0]
+    today = combined.loc[
         combined["Fecha"] == pd.Timestamp("2026-07-30")
     ].iloc[0]
-    assert current_row["Fuente"] == "forecast"
+    assert yesterday["Fuente"] == SMN_SOURCE
+    assert today["Fuente"] == FORECAST_SOURCE
 
 
 def test_missing_current_day_has_explicit_diagnostic():
-    historical = weather_frame("2026-07-27", 3, "archive")
-    forecast = weather_frame("2026-07-31", 3, "forecast")
+    historical = weather_frame("2026-07-27", 3, SMN_SOURCE)
+    forecast = weather_frame("2026-07-31", 3, FORECAST_SOURCE)
 
     with pytest.raises(RuntimeError, match="no devolvió el día actual 2026-07-30"):
         combine_historical_and_forecast(
             historical,
             forecast,
             date(2026, 7, 30),
-        )
-
-
-def test_repository_history_maps_siga_columns_and_emission():
-    raw = pd.DataFrame(
-        {
-            "Fecha": ["2026-01-01", "2026-01-02"],
-            "TMAX": [30.0, 29.0],
-            "TMIN": [12.0, 11.0],
-            "Prec": [0.0, 2.5],
-            "Fuente": ["SIGA_INTA_PERGAMINO", "ECMWF_IFS_HISTORICO"],
-            "TipoDato": ["Observado", "Provisional"],
-            "CalidadDato": [
-                "Observado_estacion",
-                "Provisional_hasta_reemplazo_SIGA",
-            ],
-            "Emision_UTC": ["2026-07-30T20:00:00+00:00"] * 2,
-        }
-    )
-
-    normalized = canonicalize_repository_history(
-        raw,
-        site=get_site("pergamino"),
-        emission="2026-07-31T00:00:00-03:00",
-        end_date=date(2026, 1, 2),
-    )
-
-    assert list(normalized.columns) == COLUMNS
-    assert normalized.iloc[0]["Fuente"] == "SIGA_INTA_PERGAMINO"
-    assert normalized.iloc[0]["Emision"] == "2026-07-30T20:00:00+00:00"
-
-
-def test_repository_history_maps_uppercase_tipo_and_fecha_emision():
-    raw = pd.DataFrame(
-        {
-            "Fecha": ["2026-01-01"],
-            "TMAX": [28.7],
-            "TMIN": [12.6],
-            "Prec": [0.0],
-            "FUENTE": ["ERA5"],
-            "TIPO": ["REANALISIS_FALLBACK"],
-            "FECHA_EMISION": ["2026-07-27T11:31:48-03:00"],
-        }
-    )
-
-    normalized = canonicalize_repository_history(
-        raw,
-        site=get_site("azul"),
-        emission="2026-07-31T00:00:00-03:00",
-        end_date=date(2026, 1, 1),
-    )
-
-    assert normalized.iloc[0]["Fuente"] == "ERA5"
-    assert normalized.iloc[0]["TipoDato"] == "REANALISIS_FALLBACK"
-    assert normalized.iloc[0]["Emision"] == "2026-07-27T11:31:48-03:00"
-    assert normalized.iloc[0]["CalidadDato"] == "Calidad_origen_no_declarada"
-
-
-def test_non_siga_repository_history_is_accepted():
-    raw = pd.DataFrame(
-        {
-            "Fecha": ["2026-01-01"],
-            "TMAX": [30.0],
-            "TMIN": [12.0],
-            "Prec": [0.0],
-            "Fuente": ["ERA5"],
-        }
-    )
-
-    normalized = canonicalize_repository_history(
-        raw,
-        site=get_site("olavarria"),
-        emission="2026-07-31T00:00:00-03:00",
-        end_date=date(2026, 1, 1),
-    )
-    assert normalized.iloc[0]["Fuente"] == "ERA5"
-
-
-def test_repository_rows_override_model_and_model_only_fills_gaps():
-    model = weather_frame("2026-01-01", 3, "modelo")
-    repository = weather_frame("2026-01-01", 1, "ERA5_REPOSITORIO_AZUL")
-    repository.loc[0, "TMAX"] = 31.5
-    repository.loc[0, "TipoDato"] = "REANALISIS_FALLBACK"
-    repository.loc[0, "CalidadDato"] = "Calidad_repositorio"
-
-    combined = merge_repository_priority_history(model, repository)
-
-    first = combined.loc[combined["Fecha"] == pd.Timestamp("2026-01-01")].iloc[0]
-    second = combined.loc[combined["Fecha"] == pd.Timestamp("2026-01-02")].iloc[0]
-    assert first["Fuente"] == "ERA5_REPOSITORIO_AZUL"
-    assert first["TMAX"] == 31.5
-    assert second["Fuente"] == FALLBACK_SOURCE
-    assert second["CalidadDato"] == "Provisional_hueco_repositorio"
-
-
-def test_build_historical_block_reads_repository_for_non_siga_site(monkeypatch):
-    model = weather_frame("2026-01-01", 3, "modelo")
-    repository = weather_frame("2026-01-01", 1, "ERA5_AZUL")
-
-    monkeypatch.setattr(
-        update_meteo,
-        "fetch_open_meteo_history",
-        lambda *args, **kwargs: model,
-    )
-    monkeypatch.setattr(
-        update_meteo,
-        "fetch_repository_history",
-        lambda *args, **kwargs: repository,
-    )
-
-    combined = build_historical_block(
-        get_site("azul"),
-        emission="2026-07-31T00:00:00-03:00",
-        end_date=date(2026, 1, 3),
-    )
-
-    first = combined.loc[combined["Fecha"] == pd.Timestamp("2026-01-01")].iloc[0]
-    second = combined.loc[combined["Fecha"] == pd.Timestamp("2026-01-02")].iloc[0]
-    assert first["Fuente"] == "ERA5_AZUL"
-    assert second["Fuente"] == FALLBACK_SOURCE
-
-
-def test_repository_history_without_siga_is_rejected_for_siga_site():
-    raw = pd.DataFrame(
-        {
-            "Fecha": ["2026-01-01"],
-            "TMAX": [30.0],
-            "TMIN": [12.0],
-            "Prec": [0.0],
-            "Fuente": ["ECMWF_IFS_HISTORICO"],
-        }
-    )
-
-    with pytest.raises(RuntimeError, match="ninguna observación SIGA"):
-        canonicalize_repository_history(
-            raw,
-            site=get_site("balcarce"),
-            emission="2026-07-31T00:00:00-03:00",
-            end_date=date(2026, 1, 1),
         )
