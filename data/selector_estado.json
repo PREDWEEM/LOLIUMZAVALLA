@@ -1,6 +1,0 @@
-{
-  "estado": "SIN_PICO_SIMULADO",
-  "modelo_activo": "pendiente",
-  "lag_operativo_dias": null,
-  "proxima_accion": "Ejecutar la meteorología y esperar el primer pico sin lag."
-}
