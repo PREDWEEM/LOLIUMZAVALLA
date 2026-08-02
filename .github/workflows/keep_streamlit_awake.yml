@@ -2,8 +2,8 @@ name: Mantener Streamlit disponible
 
 on:
   schedule:
-    # Community Cloud hiberna las apps sin tráfico durante 12 horas.
-    # Se usa el minuto 17 para evitar la congestión habitual al inicio de la hora.
+    # Streamlit Community Cloud hiberna las apps sin tráfico durante 12 horas.
+    # Se usa el minuto 17 para evitar la congestión al comienzo de cada hora.
     - cron: "17 */6 * * *"
   workflow_dispatch:
 
@@ -16,45 +16,80 @@ concurrency:
 
 jobs:
   visit-streamlit-app:
-    name: Visitar aplicación PREDWEEM
+    name: Comprobar aplicación PREDWEEM
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
 
     steps:
-      - name: Comprobar respuesta de Streamlit
+      - name: Generar tráfico y comprobar Streamlit
         env:
-          APP_URL: "https://f8d5dqg4evu9tvthrrffkl.streamlit.app/"
+          APP_ORIGIN: "https://f8d5dqg4evu9tvthrrffkl.streamlit.app"
         shell: bash
         run: |
           set -euo pipefail
 
-          response_file="${RUNNER_TEMP}/streamlit-response.html"
-          http_status="$(
+          app_url="${APP_ORIGIN}/"
+          health_url="${APP_ORIGIN}/_stcore/health"
+          response_file="${RUNNER_TEMP}/streamlit-health.txt"
+
+          echo "Generando una visita inicial sin seguir redirecciones..."
+          initial_status="$(
             curl \
-              --location \
               --silent \
               --show-error \
-              --output "${response_file}" \
+              --output /dev/null \
               --write-out "%{http_code}" \
               --connect-timeout 20 \
-              --max-time 60 \
-              --retry 2 \
+              --max-time 40 \
+              --retry 1 \
               --retry-delay 5 \
               --retry-all-errors \
-              --user-agent "PREDWEEM-availability-check/1.0" \
-              "${APP_URL}"
+              --user-agent "Mozilla/5.0 PREDWEEM-availability-check/2.0" \
+              "${app_url}" \
+            || true
           )"
+          echo "Código inicial: ${initial_status:-sin respuesta}"
 
-          echo "Código HTTP recibido: ${http_status}"
+          for attempt in 1 2 3 4 5; do
+            echo "Comprobación ${attempt}/5: ${health_url}"
 
-          if [[ "${http_status}" -lt 200 || "${http_status}" -ge 400 ]]; then
-            echo "La aplicación no respondió correctamente."
-            exit 1
+            http_status="$(
+              curl \
+                --silent \
+                --show-error \
+                --output "${response_file}" \
+                --write-out "%{http_code}" \
+                --connect-timeout 20 \
+                --max-time 60 \
+                --retry 1 \
+                --retry-delay 5 \
+                --retry-all-errors \
+                --header "Accept: text/plain,*/*;q=0.1" \
+                --user-agent "PREDWEEM-availability-check/2.0" \
+                "${health_url}" \
+              || true
+            )"
+
+            echo "Código HTTP de salud: ${http_status:-sin respuesta}"
+
+            if [[ "${http_status}" == "200" ]]; then
+              echo "Respuesta del endpoint:"
+              cat "${response_file}" || true
+              echo
+              echo "La aplicación está disponible."
+              exit 0
+            fi
+
+            if [[ "${attempt}" -lt 5 ]]; then
+              echo "Streamlit todavía no está disponible; nuevo intento en 20 segundos."
+              sleep 20
+            fi
+          done
+
+          echo "La aplicación no devolvió HTTP 200 en ${health_url}."
+          if [[ -s "${response_file}" ]]; then
+            echo "Última respuesta recibida:"
+            head -c 1000 "${response_file}" || true
+            echo
           fi
-
-          if grep -Eqi "gone to sleep|app has gone to sleep|zzz" "${response_file}"; then
-            echo "La aplicación respondió con una página de hibernación."
-            exit 1
-          fi
-
-          echo "La aplicación respondió y permanece disponible."
+          exit 1
