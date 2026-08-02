@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
-from config_zavalla import CONFIG
+from config_multisitio import CONFIG
 
 LOG_Y_RANGE = [0.0, 2.05]
 LOG_Y_TICKS = [0.0, 0.5, 1.0, 1.5, 2.0]
