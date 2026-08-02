@@ -1,4 +1,18 @@
-# PREDWEEM LOLIUM — Modelo operativo automático por localidad
+# PREDWEEM LOLIUM — Plataforma multisitio
+
+Este repositorio se mantiene como **integrador multisitio** para Azul, Balcarce, Bordenave, Lartigau, Olavarría, Pergamino, San Pedro, Tres Arroyos y Zavalla.
+
+## Rol de los repositorios
+
+```text
+PREDWEEM/LOLIUMZAVALLA
+└── plataforma multisitio e integración regional
+
+PREDWEEM/LOLIUM_ZAVALLA2026
+└── modelo independiente y meteorología propia de Zavalla
+```
+
+El registro `SITES` de este repositorio no debe reducirse a una sola localidad. La estructura multisitio está protegida mediante `tests/test_multisitio_registry.py` y el workflow `Validar estructura multisitio`.
 
 Aplicación multisitio para simular la emergencia de *Lolium* con una política de modelo definida previamente para cada localidad.
 
