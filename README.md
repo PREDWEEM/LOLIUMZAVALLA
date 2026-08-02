@@ -5,7 +5,7 @@ Este repositorio se mantiene como **integrador multisitio** para Azul, Balcarce,
 ## Rol de los repositorios
 
 ```text
-PREDWEEM/LOLIUMZAVALLA
+PREDWEEM/MULTISITIO
 └── plataforma multisitio e integración regional
 
 PREDWEEM/LOLIUM_ZAVALLA2026
