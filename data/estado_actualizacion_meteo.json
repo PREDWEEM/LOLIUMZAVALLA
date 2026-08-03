@@ -1,5 +1,5 @@
 {
-  "actualizado_en": "2026-08-02T19:57:45-03:00",
+  "actualizado_en": "2026-08-03T10:24:14-03:00",
   "modo": "HIBRIDO_ZAVALLA_Y_COPIA_EXACTA_MULTISITIO",
   "descripcion": "Zavalla prioriza SMN Rosario Aero, completa con NOAA NCEI GSOD y utiliza Open-Meteo ECMWF IFS para faltantes y pronóstico. Los demás sitios conservan copia exacta de sus repositorios.",
   "sitios": {
@@ -10,7 +10,7 @@
       "url_solicitada": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_AZUL2026/main/meteo_daily.csv",
       "archivo_destino": "data/meteo_sitios/azul.csv",
       "bytes": 16752,
-      "sha256": "f703ff7da7b91fdbd930f0cc38299892e33afd188e88e3c7e38f6a89562cdb2c",
+      "sha256": "87c180aed1ae541ed8d6308e37a76e4ab7ec6b3592e7dbe5a6f0a42ade2d1884",
       "copia_exacta": true
     },
     "balcarce": {
@@ -19,8 +19,8 @@
       "url_origen": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_BAL2026/main/meteo_daily.csv",
       "url_solicitada": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_BAL2026/main/meteo_daily.csv",
       "archivo_destino": "data/meteo_sitios/balcarce.csv",
-      "bytes": 33068,
-      "sha256": "b9f264cc41910a597dc0c500b71cbc763c8d482ba2d215fc989fe85a70e707f9",
+      "bytes": 33265,
+      "sha256": "66f977bac3cbeb0cf8592f2ec5f0586d1837485a23acfebf341088a5e7eecfa6",
       "copia_exacta": true
     },
     "bordenave": {
@@ -50,7 +50,7 @@
       "url_solicitada": "https://raw.githubusercontent.com/PREDWEEM/LOLIUM_OLAVA2026/main/meteo_daily.csv",
       "archivo_destino": "data/meteo_sitios/olavarria.csv",
       "bytes": 16752,
-      "sha256": "a19b5951d5bb9db25ccd11d24918258524e14910bf6e82e15c2a3e09d8fe6314",
+      "sha256": "b37f0aae6f0ea2270bf79c4c0453a4cb0267d4bc8e6de601b37a3362e982dde4",
       "copia_exacta": true
     },
     "pergamino": {
@@ -86,10 +86,10 @@
     "zavalla": {
       "modo": "hibrido_observado_pronosticado",
       "archivo_destino": "data/meteo_sitios/zavalla.csv",
-      "actualizado": "2026-08-02T19:56:54-03:00",
+      "actualizado": "2026-08-03T10:23:11-03:00",
       "inicio": "2026-01-01",
-      "fin": "2026-08-09",
-      "filas": 221,
+      "fin": "2026-08-10",
+      "filas": 222,
       "prioridad": [
         "SMN_WIS2_ROSARIO_AERO_87480",
         "NOAA_NCEI_GSOD_ROSARIO_AERO_87480",
@@ -99,7 +99,7 @@
       "diagnostico": {
         "smn": {
           "estado": "disponible",
-          "filas_con_temperatura": 148,
+          "filas_con_temperatura": 149,
           "filas_con_precipitacion": 27
         },
         "noaa": {
@@ -125,7 +125,7 @@
           {
             "fuente": "SMN_WIS2_ROSARIO_AERO_87480+OPEN_METEO_ECMWF_IFS_ARCHIVE_FALLBACK",
             "tipo": "Provisional",
-            "filas": 121
+            "filas": 122
           }
         ]
       },
@@ -148,7 +148,7 @@
         {
           "fuente": "SMN_WIS2_ROSARIO_AERO_87480+OPEN_METEO_ECMWF_IFS_ARCHIVE_FALLBACK",
           "tipo": "Provisional",
-          "filas": 121
+          "filas": 122
         }
       ],
       "archivo_canonico": "data/meteo_sitios/zavalla.csv"
