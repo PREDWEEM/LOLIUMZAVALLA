@@ -1,4 +1,4 @@
-from app_fuente_hibrida import run
+from app_agotamiento_balcarce import run
 
 
 if __name__ == "__main__":
