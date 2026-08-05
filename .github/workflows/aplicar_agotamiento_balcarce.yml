@@ -1,0 +1,182 @@
+name: Aplicar agotamiento de cohorte Balcarce
+
+on:
+  push:
+    paths:
+      - .github/workflows/aplicar_agotamiento_balcarce.yml
+
+permissions:
+  contents: write
+
+jobs:
+  aplicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Incorporar extinción fisiológica específica de Balcarce
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("app_umbral_operativo.py")
+          source = path.read_text(encoding="utf-8")
+
+          if "COHORT_EXHAUSTION_DAYS = 110" in source:
+              print("La regla ya estaba incorporada.")
+              raise SystemExit(0)
+
+          source = source.replace(
+              "import re\nfrom typing import Any, Mapping\n",
+              "import re\nfrom typing import Any, Mapping\n\nimport numpy as np\n",
+              1,
+          )
+
+          source = source.replace(
+              "LOW_EMERGENCE_THRESHOLD_PCT = EMERGENCE_THRESHOLD * 100.0\n\n"
+              "_ORIGINAL_RENDER_EMERGENCE_SEMAPHORE = base._render_emergence_semaphore\n",
+              "LOW_EMERGENCE_THRESHOLD_PCT = EMERGENCE_THRESHOLD * 100.0\n"
+              "COHORT_EXHAUSTION_DAYS = 110\n"
+              "COHORT_REMAINING_THRESHOLD = 0.005\n\n"
+              "_ORIGINAL_RENDER_EMERGENCE_SEMAPHORE = base._render_emergence_semaphore\n"
+              "_ORIGINAL_SIMULATE_DUAL = base.principal.simulate_dual\n"
+              "_ORIGINAL_BUILD_OPERATIONAL_DATA = base.principal.build_operational_data\n",
+              1,
+          )
+
+          marker = "\ndef _seven_day_emergence_forecast(data: Any, today: Any) -> dict[str, Any]:\n"
+          addition = r'''
+
+def _simulate_dual_with_balcarce_exhaustion(*args: Any, **kwargs: Any):
+    """Extingue la cohorte de Balcarce cuando su remanente fisiológico es mínimo."""
+    result = _ORIGINAL_SIMULATE_DUAL(*args, **kwargs)
+    active_site = str(
+        st.session_state.get("selected_lolium_site", "")
+    ).strip().lower()
+    if active_site != "balcarce":
+        return result
+
+    config = kwargs.get("config")
+    if config is None:
+        return result
+
+    tau = max(float(config.decaimiento_tau_dias), 0.01)
+    beta = max(float(config.decaimiento_beta), 0.01)
+    data = result.data
+
+    for suffix in ("SIN_LAG", "CON_LAG"):
+        days_column = f"DIAS_DESDE_PICO_{suffix}"
+        emergence_column = f"EMERREL_{suffix}"
+        cumulative_column = f"EMERAC_{suffix}"
+        factor_column = f"FACTOR_DECAIMIENTO_{suffix}"
+        if days_column not in data or emergence_column not in data:
+            continue
+
+        days = pd.to_numeric(data[days_column], errors="coerce").fillna(0.0)
+        base_factor = np.exp(-np.power(days.to_numpy(float) / tau, beta))
+        exhausted = (
+            (days.to_numpy(float) >= COHORT_EXHAUSTION_DAYS)
+            & (base_factor <= COHORT_REMAINING_THRESHOLD)
+        )
+
+        data[f"FACTOR_DECAIMIENTO_BASE_{suffix}"] = base_factor
+        data[f"COHORTE_AGOTADA_{suffix}"] = exhausted
+        data.loc[exhausted, emergence_column] = 0.0
+        if factor_column in data:
+            data.loc[exhausted, factor_column] = 0.0
+        data[cumulative_column] = data[emergence_column].cumsum()
+
+    return result
+
+
+def _build_operational_data_with_exhaustion(
+    data: Any,
+    model_mode: str,
+    lag_days: int,
+):
+    """Conserva en la salida operativa la auditoría del agotamiento aplicado."""
+    suffix = "CON_LAG" if model_mode == "con_lag" else "SIN_LAG"
+    exhausted_column = f"COHORTE_AGOTADA_{suffix}"
+    base_factor_column = f"FACTOR_DECAIMIENTO_BASE_{suffix}"
+    exhausted = data.get(exhausted_column)
+    base_factor = data.get(base_factor_column)
+
+    output, model_name, peak = _ORIGINAL_BUILD_OPERATIONAL_DATA(
+        data,
+        model_mode,
+        lag_days,
+    )
+    output["Cohorte_Agotada"] = (
+        exhausted.to_numpy(bool) if exhausted is not None else False
+    )
+    output["Factor_Decaimiento_Base"] = (
+        base_factor.to_numpy(float) if base_factor is not None else 1.0
+    )
+    output["Criterio_Agotamiento_Dias"] = COHORT_EXHAUSTION_DAYS
+    output["Criterio_Remanente_Maximo"] = COHORT_REMAINING_THRESHOLD
+    return output, model_name, peak
+'''
+          if marker not in source:
+              raise RuntimeError("No se encontró el punto de inserción de funciones.")
+          source = source.replace(marker, addition + marker, 1)
+
+          source = source.replace(
+              "    original_emergence_wrapper = base._emergence_figure_with_phenology\n"
+              "    original_toggle = st.toggle\n",
+              "    original_emergence_wrapper = base._emergence_figure_with_phenology\n"
+              "    original_simulate_dual = base.principal.simulate_dual\n"
+              "    original_build_operational_data = base.principal.build_operational_data\n"
+              "    original_toggle = st.toggle\n",
+              1,
+          )
+
+          source = source.replace(
+              "    base._emergence_figure_with_phenology = _emergence_figure_with_low_panel\n"
+              "    st.toggle = toggle_with_operational_defaults\n",
+              "    base._emergence_figure_with_phenology = _emergence_figure_with_low_panel\n"
+              "    base.principal.simulate_dual = _simulate_dual_with_balcarce_exhaustion\n"
+              "    base.principal.build_operational_data = _build_operational_data_with_exhaustion\n"
+              "    st.toggle = toggle_with_operational_defaults\n",
+              1,
+          )
+
+          source = source.replace(
+              "        base._emergence_figure_with_phenology = original_emergence_wrapper\n"
+              "        st.toggle = original_toggle\n",
+              "        base._emergence_figure_with_phenology = original_emergence_wrapper\n"
+              "        base.principal.simulate_dual = original_simulate_dual\n"
+              "        base.principal.build_operational_data = original_build_operational_data\n"
+              "        st.toggle = original_toggle\n",
+              1,
+          )
+
+          required = (
+              "COHORT_EXHAUSTION_DAYS = 110",
+              "COHORT_REMAINING_THRESHOLD = 0.005",
+              "base.principal.simulate_dual = _simulate_dual_with_balcarce_exhaustion",
+              "output[\"Cohorte_Agotada\"]",
+          )
+          missing = [item for item in required if item not in source]
+          if missing:
+              raise RuntimeError("La transformación quedó incompleta: " + ", ".join(missing))
+
+          path.write_text(source, encoding="utf-8")
+          PY
+
+          python -m py_compile app_umbral_operativo.py
+
+      - name: Confirmar cambio
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No había cambios pendientes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app_umbral_operativo.py
+          git commit -m "Aplica agotamiento fisiológico de cohorte en Balcarce"
+          git push
